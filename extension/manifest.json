@@ -4,7 +4,7 @@
   "description": "Find the recurring phrases and keywords in a website’s article titles.",
   "version": "1.0.0",
   "permissions": ["activeTab", "storage"],
-  "host_permissions": ["http://127.0.0.1/*"],
+  "host_permissions": ["https://titlepulse.onrender.com/*"],
   "action": { "default_title": "TitlePulse", "default_popup": "popup.html" },
   "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'" }
 }
