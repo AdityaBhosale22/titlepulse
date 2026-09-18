@@ -10,6 +10,9 @@ let pollFailures = 0;
 let exporting = false;
 let completedResult = null;
 let analysisDeadline = 0;
+let sheetTimer;
+let sheetSaving = false;
+let sheetChecks = 0;
 const storage = {
   async get() { if (isExtension) return (await chrome.storage.local.get('titlepulse')).titlepulse; try { return JSON.parse(localStorage.getItem('titlepulse')); } catch { return null; } },
   async set(value) { if (isExtension) await chrome.storage.local.set({ titlepulse: value }); else localStorage.setItem('titlepulse', JSON.stringify(value)); },
@@ -19,6 +22,7 @@ function setBusy(value) {
   busy = value;
   $('analyze').disabled = value || exporting;
   $('export-excel').disabled = value || exporting || !completedResult;
+  $('save-sheet').disabled = value || sheetSaving || !completedResult;
   $('website').disabled = value;
   $('detect').disabled = value;
   $('analyze').replaceChildren(document.createTextNode(value ? 'Analyzing…' : 'Analyze website'));
@@ -71,6 +75,7 @@ function showPatterns(items, id = 'phrases') {
 function showResults(result) {
   completedResult = result;
   $('export-excel').disabled = exporting;
+  $('save-sheet').disabled = sheetSaving;
   $('export-status').hidden = true;
   $('results').hidden = false;
   $('total').textContent = result.totalTitles;
@@ -104,7 +109,7 @@ async function handleJob(job) {
     timer = setTimeout(poll, 1000);
   } else {
     setBusy(false);
-    if (job.status === 'complete') showResults(job.result);
+    if (job.status === 'complete') { showResults(job.result); showSheetState(job.sheetSave); }
     else status('Couldn’t analyze this website', job.error, { error: true });
   }
 }
@@ -193,6 +198,38 @@ $('export-excel').addEventListener('click', async () => {
   }
 });
 $('website').addEventListener('input', () => { $('input-error').hidden = true; $('website').removeAttribute('aria-invalid'); });
+function showSheetState(state) {
+  clearTimeout(sheetTimer);
+  sheetSaving = state?.status === 'saving';
+  $('save-sheet').disabled = busy || sheetSaving || !completedResult;
+  $('save-sheet').textContent = sheetSaving ? 'Saving...' : 'Save to Google Sheet';
+  $('sheet-status').hidden = !state;
+  $('sheet-status').classList.toggle('error', state?.status === 'error');
+  $('sheet-status').textContent = state?.status === 'saved' ? 'Saved to tab: ' + state.tab : state?.status === 'error' ? state.error : state ? 'Saving all ranked results and source titles. You can close this popup.' : '';
+  if (sheetSaving) {
+    const id = activeJob;
+    sheetTimer = setTimeout(async () => {
+      if (activeJob !== id) return;
+      try {
+        if (++sheetChecks > 60) throw new Error('Save confirmation timed out. Reopen the popup to check its status.');
+        const job = await request('/api/analyses/' + id);
+        if (activeJob === id) showSheetState(job.sheetSave);
+      } catch (error) { if (activeJob === id) showSheetState({ status: 'error', error: error.message + ' Check the sheet before retrying.' }); }
+    }, 1000);
+  }
+}
+$('save-sheet').addEventListener('click', async () => {
+  if (busy || sheetSaving || !completedResult || !activeJob) return;
+  const key = $('sheet-key').value.trim();
+  if (!key) { showSheetState({ status: 'error', error: 'Enter your team save key under Team sheet access.' }); $('sheet-key').closest('details').open = true; $('sheet-key').focus(); return; }
+  const id = activeJob;
+  sheetChecks = 0;
+  showSheetState({ status: 'saving' });
+  try {
+    const state = await request('/api/analyses/' + id + '/sheets', { method: 'POST', headers: { 'X-TitlePulse-Team-Key': key } });
+    if (activeJob === id) showSheetState(state);
+  } catch (error) { if (activeJob === id) showSheetState({ status: 'error', error: error.message }); }
+});
 $('retry').addEventListener('click', () => { pollFailures = 0; setBusy(true); poll(); });
 async function detect({ silent = false } = {}) {
   try {
@@ -211,5 +248,5 @@ async function init() {
   if (saved?.id) { activeJob = saved.id; setBusy(true); status('Restoring analysis', 'Checking your last analysis…', { loading: true }); await poll(); }
   else if (isExtension) await detect({ silent: true });
 }
-window.addEventListener('pagehide', () => clearTimeout(timer));
+window.addEventListener('pagehide', () => { clearTimeout(timer); clearTimeout(sheetTimer); });
 init();

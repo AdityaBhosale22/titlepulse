@@ -3,10 +3,31 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 
+function registerSheetTests() {
+test('sheet action requires team key without affecting Excel export', async t => {
+  const ui=await setup(t);ui.get('website').value='example.com';ui.submit();await flush();
+  ui.get('save-sheet').click();await flush();
+  assert.match(ui.get('sheet-status').textContent,/team save key/);
+  assert.equal(ui.get('export-excel').disabled,false);
+  assert.equal(ui.calls.length,1);
+});
+test('sheet action sends only authorization and job id, then shows saved tab', async t => {
+  const ui=await setup(t,{fetcher:async (url,options)=>({ok:true,json:async()=>url.endsWith('/sheets')?{status:'saved',tab:'example'}:{id:'job',status:'complete',result:result()}})});
+  ui.get('website').value='example.com';ui.submit();await flush();
+  ui.get('sheet-key').value='team-key';ui.get('save-sheet').click();await flush();
+  const call=ui.calls.find(([url])=>url.endsWith('/sheets'));
+  assert.equal(call[1].headers['X-TitlePulse-Team-Key'],'team-key');
+  assert.equal(call[1].body,undefined);
+  assert.match(ui.get('sheet-status').textContent,/Saved to tab: example/);
+  assert.equal(ui.get('save-sheet').disabled,false);
+});
+}
+
 const html = await readFile(new URL('../extension/popup.html', import.meta.url), 'utf8');
 const script = (await readFile(new URL('../extension/popup.js', import.meta.url), 'utf8')).replace("import { API_BASE } from './config.js';", "const API_BASE = 'http://127.0.0.1:3000';");
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const result = overrides => ({ website: 'https://example.com/', totalTitles: 20, phrases: [{ term: 'content strategy', count: 8 }], keywords: [{ term: 'content', count: 12 }], partial: false, warnings: [], ...overrides });
+registerSheetTests();
 
 async function setup(t, { fetcher, saved, extension = false } = {}) {
   const dom = new JSDOM(html, { url: 'http://127.0.0.1:3000', runScripts: 'outside-only' });

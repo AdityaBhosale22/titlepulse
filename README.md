@@ -156,6 +156,12 @@ Manual extension checks: submit an invalid URL; analyze a public blog; click Ana
 
 ## Hosting
 
+### Shared Google Sheet saving
+
+The separate Save to Google Sheet action sends the full cached analysis to the configured Apps Script; it never crawls again or changes Excel export. The provided deployment URL is the default in backend/sheets.js. Set GOOGLE_SHEETS_SCRIPT_URL to override it, GOOGLE_SHEETS_SECRET to the exact TITLEPULSE_SECRET script property, and SHEETS_TEAM_KEY to a separate random key of at least 32 characters. Put these values in Render environment settings (or your local untracked .env), never extension files or Git. Share only SHEETS_TEAM_KEY privately with teammates; they enter it under Team sheet access in the popup. Use HTTPS outside localhost. Rotate the team key when access must be revoked; this is shared-key access, not individual user identity.
+
+Redeploy/restart the backend and reload the extension. Analyze, enter the team key, and click Save to Google Sheet. The deployed script owns per-host tab naming and replacement. Existing unrelated tabs remain untouched. Saves continue on the backend when the popup closes, and reopening restores their state while the analysis remains cached (15 minutes). Duplicate saves of a cached job return its saved confirmation without another write. Backend restarts lose in-memory state. After an ambiguous timeout, inspect the sheet before retrying. No automatic retries overwrite a later team save. Partial and empty completed results can be saved and replace the previous tab contents. The Apps Script secret and team key must both be configured before live verification.
+
 Discovery prioritizes editorial/article links over generic sitemap URLs, including when the candidate limit is full. It checks section-local sitemap indexes (such as `/blog/sitemap_index.xml`), follows related article links, supports flat article URLs with article markup, and excludes blog/localized landing pages. Sitemap and listing discovery have separate time budgets so they cannot consume the entire crawl. Results remain bounded samples on large sites; blocked or JavaScript-only pages may still be unavailable.
 
 This is a working local MVP, without billing or user accounts. To deploy one shared instance:

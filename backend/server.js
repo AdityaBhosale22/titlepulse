@@ -5,6 +5,8 @@ import { resolve } from 'node:path';
 import { crawlWebsite } from './crawler.js';
 import { normalizeUrl, sameSite, UserError } from './network.js';
 import { createAnalysisWorkbook, XLSX_TYPE } from './export.js';
+import { saveToSheets } from './sheets.js';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 // Full export data stays in the job cache; the UI only receives top results.
 function publicJob(job) {
@@ -13,12 +15,13 @@ function publicJob(job) {
   return { ...job, result };
 }
 
-export function createApp({ crawl = crawlWebsite, now = Date.now, jobTimeout = 110000 } = {}) {
+export function createApp({ crawl = crawlWebsite, now = Date.now, jobTimeout = 110000, sheetSave = saveToSheets, teamKey = process.env.SHEETS_TEAM_KEY } = {}) {
   const app = express();
   const jobs = new Map();
   const byUrl = new Map();
   const rate = new Map();
   const exports = new WeakMap();
+  let sheetWrites = 0;
   const ttl = 15 * 60 * 1000;
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -28,7 +31,7 @@ export function createApp({ crawl = crawlWebsite, now = Date.now, jobTimeout = 1
     const sameOrigin = origin === `${req.protocol}://${req.get('host')}`;
     if (origin && !extensionAllowed && !sameOrigin) return res.status(403).json({ error: 'This origin is not allowed.' });
     if (origin) { res.set('Access-Control-Allow-Origin', origin); res.vary('Origin'); }
-    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, X-TitlePulse-Team-Key');
     res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
@@ -90,6 +93,31 @@ export function createApp({ crawl = crawlWebsite, now = Date.now, jobTimeout = 1
     } catch (error) { next(error); }
   });
   const extension = fileURLToPath(new URL('../extension/', import.meta.url));
+  app.post('/api/analyses/:id/sheets', (req, res, next) => {
+    try {
+      if (!teamKey || teamKey.length < 32) throw new UserError('Sheet saving is not configured. Ask the administrator to set SHEETS_TEAM_KEY (32+ characters).', 503);
+      const digest = value => createHash('sha256').update(value).digest();
+      if (!timingSafeEqual(digest(req.get('X-TitlePulse-Team-Key') || ''), digest(teamKey))) throw new UserError('Enter the correct team save key.', 401);
+      cleanup();
+      const job = jobs.get(req.params.id);
+      if (!job) throw new UserError('This analysis expired. Analyze the website again before saving.', 404);
+      if (job.status !== 'complete') throw new UserError('Wait for the analysis to finish before saving.', 409);
+      if (job.sheetSave?.status === 'saving') return res.status(202).json(job.sheetSave);
+      if (job.sheetSave?.status === 'saved') return res.json(job.sheetSave);
+      if (sheetWrites >= 2) throw new UserError('Other sheet saves are running. Please retry shortly.', 429);
+      if (job.sheetSave?.attemptedAt && now() - job.sheetSave.attemptedAt < 10000) throw new UserError('Please wait a few seconds before retrying.', 429);
+      job.sheetSave = { status: 'saving', attemptedAt: now() };
+      sheetWrites++;
+      res.status(202).json(job.sheetSave);
+      let watchdog;
+      Promise.race([
+        Promise.resolve().then(() => sheetSave(job.result)),
+        new Promise((_, reject) => { watchdog = setTimeout(() => reject(new UserError('Save confirmation timed out. Check the spreadsheet before retrying.', 504)), 50000); watchdog.unref(); })
+      ]).then(value => { job.sheetSave = { ...job.sheetSave, status: 'saved', tab: value.tab }; })
+        .catch(error => { job.sheetSave = { ...job.sheetSave, status: 'error', error: error instanceof UserError ? error.message : 'Unable to save. Check the spreadsheet before retrying.' }; })
+        .finally(() => { clearTimeout(watchdog); sheetWrites--; });
+    } catch (error) { next(error); }
+  });
   app.use(express.static(extension, { index: 'popup.html' }));
   app.use((_, res) => res.status(404).json({ error: 'Not found.' }));
   app.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: error instanceof UserError ? error.message : error.type === 'entity.parse.failed' ? 'Request must contain valid JSON.' : error.status === 413 ? 'Request is too large.' : 'Something went wrong. Please try again.' }));
