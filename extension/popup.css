@@ -43,7 +43,7 @@ h2 { font-size:14px; margin:0; }
 .count-note { margin:10px 0; }
 details { margin-top:14px; font-size:12px; }
 summary { cursor:pointer; font-weight:600; min-height:30px; padding:5px 0; }
-#sheet-access { padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:#fafcff; }
+#sheet-access { margin-top:10px; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:#fafcff; }
 #sheet-access label { margin:8px 0 6px; }
 .password-row { display:flex; gap:8px; align-items:center; }
 .password-row input { flex:1; }

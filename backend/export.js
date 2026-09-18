@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { buildReport } from './report.js';
 
 export const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const textCell = value => String(value ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').slice(0, 32767);
@@ -9,6 +10,36 @@ export async function createAnalysisWorkbook(result) {
   workbook.title = `TitlePulse analysis: ${result.website}`;
   workbook.subject = result.partial ? 'Partial crawl results' : 'Title analysis';
   workbook.description = [result.website, `Titles analyzed: ${result.totalTitles}`, ...(result.warnings || [])].join('\n');
+
+  const report = buildReport(result);
+  const overview = workbook.addWorksheet('Website Report');
+  overview.columns = [{width:24},{width:46},{width:22},{width:76},{width:65}];
+  overview.views = [{state:'frozen', ySplit:7, showGridLines:false}];
+  report.rows.forEach((values, index) => {
+    const row = overview.addRow(values.map(value => typeof value === 'number' ? value : textCell(value)));
+    row.font = {name:'Calibri',size:11,color:{argb:'FF172B4D'}};
+    row.alignment = {vertical:'top',wrapText:true};
+    row.height = Math.min(409, Math.max(28, ...values.map((value,col)=>Math.ceil(String(value).length/(overview.columns[col].width-3))*16+10)));
+    if(report.sections.includes(index+1)) {
+      overview.mergeCells(index+1,1,index+1,5);
+      row.font = {name:'Calibri',size:13,bold:true,color:{argb:'FFFFFFFF'}};
+      row.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF0867C9'}};
+      row.height=32;
+    } else if(report.headers.includes(index+1)) {
+      row.font = {name:'Calibri',size:11,bold:true};
+      row.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFEAF3FF'}};
+      row.height=32;
+    } else if(values[0] && values.slice(1).every(v=>v==='')) {
+      overview.mergeCells(index+1,1,index+1,5);row.height=30;
+    } else if(index>0 && index<7) {
+      overview.mergeCells(index+1,2,index+1,5);row.height=34;
+    } else if(index%2===0) row.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF7FAFF'}};
+    if(typeof values[4]==='string' && /^https?:\/\//i.test(values[4])) {
+      try { const url = new URL(values[4]); if(!url.username&&!url.password) row.getCell(5).value={text:textCell(values[4]),hyperlink:url.href}; } catch {}
+      row.getCell(5).font={name:'Calibri',size:11,color:{argb:'FF0867C9'},underline:true};
+    }
+  });
+
   const ranked = workbook.addWorksheet('Ranked Analysis');
   ranked.columns = [
     { header: 'Rank', key: 'rank', width: 10 },

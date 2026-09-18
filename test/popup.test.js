@@ -7,14 +7,15 @@ function registerSheetTests() {
 test('sheet action requires team key without affecting Excel export', async t => {
   const ui=await setup(t);ui.get('website').value='example.com';ui.submit();await flush();
   ui.get('save-sheet').click();await flush();
-  assert.match(ui.get('sheet-status').textContent,/team save key/);
+  assert.equal(ui.get('sheet-access').hidden,false);
+  assert.equal(ui.get('sheet-status').hidden,true);
   assert.equal(ui.get('export-excel').disabled,false);
   assert.equal(ui.calls.length,1);
 });
 test('sheet action sends only authorization and job id, then shows saved tab', async t => {
   const ui=await setup(t,{fetcher:async (url,options)=>({ok:true,json:async()=>url.endsWith('/sheets')?{status:'saved',tab:'example'}:{id:'job',status:'complete',result:result()}})});
   ui.get('website').value='example.com';ui.submit();await flush();
-  ui.get('sheet-key').value='team-key';ui.get('save-sheet').click();await flush();
+  ui.get('save-sheet').click();ui.get('sheet-key').value='team-key';ui.get('sheet-form').dispatchEvent(new ui.dom.window.Event('submit',{cancelable:true}));await flush();
   const call=ui.calls.find(([url])=>url.endsWith('/sheets'));
   assert.equal(call[1].headers['X-TitlePulse-Team-Key'],'team-key');
   assert.equal(call[1].body,undefined);
@@ -38,7 +39,7 @@ test('password submit enables on input and saves with Enter/form submission', as
   ui.get('website').value='example.com';ui.submit();await flush();
   assert.equal(ui.get('sheet-submit').disabled,true);
   ui.get('save-sheet').click();
-  assert.equal(ui.get('sheet-access').open,true);
+  assert.equal(ui.get('sheet-access').hidden,false);
   ui.get('sheet-key').value='test-password';
   ui.get('sheet-key').dispatchEvent(new ui.dom.window.Event('input'));
   assert.equal(ui.get('sheet-submit').disabled,false);
@@ -49,8 +50,8 @@ test('password submit enables on input and saves with Enter/form submission', as
   assert.equal(ui.get('sheet-submit').textContent,'Saving...');
   finish();await flush();
   assert.match(ui.get('sheet-status').textContent,/Saved to tab/);
-  assert.equal(ui.get('sheet-access').open,false);
-  assert.equal(ui.get('sheet-submit').disabled,false);
+  assert.equal(ui.get('sheet-access').hidden,true);
+  assert.equal(ui.get('sheet-submit').disabled,true);
 });
 test('utility layout forces light mode and opens the shared sheet safely', async t => {
   const ui=await setup(t);

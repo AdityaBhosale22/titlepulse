@@ -1,5 +1,9 @@
 # TitlePulse
 
+### Readable reports and password prompt
+
+Click Save to Google Sheet to reveal the password form; Submit sends the save, Cancel clears it. There is no separate access toggle. The Excel workbook opens with Website Report, with summary, recurring-pattern evidence, long-tail keywords, individual keywords and clickable source URLs. Raw Ranked Analysis and Source Titles tabs remain available. Google Sheets uses the same report on one tab per website. **Update the deployed Apps Script using apps-script/Code.gs and follow apps-script/README.md** to enable the new layout. Editing local files alone does not update Google's deployment.
+
 A minimal Manifest V3 Chrome extension and Express backend that ranks recurring 2–4 word title patterns and specific long-tail phrases, with matching article titles. Keywords are an optional, collapsed secondary section. Export the full ranked analysis and source titles to Excel. No database, accounts, AI API, or frontend build step.
 
 ## Run the backend

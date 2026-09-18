@@ -81,7 +81,7 @@ export function analyzeTitles(titles) {
     .map(([term, count]) => ({ term, count }));
   const longTails = findLongTails(titles, STOP);
   const rankedAnalysis = [
-    ...phrases.map(item => ({ type: 'Phrase', term: item.label, count: item.count })),
+    ...phrases.map(item => ({ type: 'Phrase', term: item.label, count: item.count, matchingTitles: item.matchingTitles })),
     ...rankedKeywords.map(item => ({ type: 'Keyword', term: item.term, count: item.count })),
     ...longTails.map(item => ({ type: 'Long-tail', term: item.term, count: item.count })),
   ].sort((a, b) => b.count - a.count || a.type.localeCompare(b.type, 'en') || a.term.localeCompare(b.term, 'en'));

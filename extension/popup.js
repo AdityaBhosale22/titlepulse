@@ -154,6 +154,7 @@ $('analyze-form').addEventListener('submit', async event => {
   $('input-error').hidden = true; $('website').removeAttribute('aria-invalid');
   $('results').hidden = true;
   completedResult = null;
+  $('sheet-access').hidden = true; $('sheet-key').value = '';
   setBusy(true); status('Starting analysis', 'Looking for article titles on your website…', { loading: true });
   try {
     const job = await request('/api/analyses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
@@ -204,7 +205,7 @@ function showSheetState(state) {
   sheetSaving = state?.status === 'saving';
   $('save-sheet').disabled = busy || sheetSaving || !completedResult;
   updateSheetSubmit();
-  if (state?.status === 'saved') $('sheet-access').open = false;
+  if (state?.status === 'saved') { $('sheet-access').hidden = true; $('sheet-key').value = ''; updateSheetSubmit(); $('save-sheet').focus(); }
   $('save-sheet').textContent = sheetSaving ? 'Saving...' : 'Save to Google Sheet';
   $('sheet-status').hidden = !state;
   $('sheet-status').classList.toggle('error', state?.status === 'error');
@@ -224,7 +225,7 @@ function showSheetState(state) {
 async function saveSheet() {
   if (busy || sheetSaving || !completedResult || !activeJob) return;
   const key = $('sheet-key').value.trim();
-  if (!key) { showSheetState({ status: 'error', error: 'Enter your team save key under Team sheet access.' }); $('sheet-key').closest('details').open = true; $('sheet-key').focus(); return; }
+  if (!key) { $('sheet-access').hidden = false; $('sheet-key').focus(); return; }
   const id = activeJob;
   sheetChecks = 0;
   showSheetState({ status: 'saving' });
@@ -235,10 +236,17 @@ async function saveSheet() {
 }
 function updateSheetSubmit() {
   $('sheet-submit').disabled = busy || sheetSaving || !completedResult || !$('sheet-key').value.trim();
-  $('sheet-submit').textContent = sheetSaving ? 'Saving...' : 'Submit & Save';
+  $('sheet-submit').textContent = sheetSaving ? 'Saving...' : 'Submit';
   $('sheet-form').setAttribute('aria-busy', String(sheetSaving));
+  $('sheet-cancel').disabled = sheetSaving;
 }
-$('save-sheet').addEventListener('click', saveSheet);
+$('save-sheet').addEventListener('click', () => {
+  if (busy || sheetSaving || !completedResult) return;
+  $('sheet-access').hidden = false;
+  updateSheetSubmit();
+  $('sheet-key').focus();
+});
+$('sheet-cancel').addEventListener('click', () => { $('sheet-access').hidden = true; $('sheet-key').value = ''; updateSheetSubmit(); $('save-sheet').focus(); });
 $('sheet-key').addEventListener('input', updateSheetSubmit);
 $('sheet-form').addEventListener('submit', event => { event.preventDefault(); saveSheet(); });
 $('retry').addEventListener('click', () => { pollFailures = 0; setBusy(true); poll(); });

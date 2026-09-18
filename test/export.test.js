@@ -12,7 +12,7 @@ test('exports all ranked results and all source titles into the two requested sh
   assert.equal(buffer.subarray(0, 2).toString(), 'PK');
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
-  assert.deepEqual(workbook.worksheets.map(sheet => sheet.name), ['Ranked Analysis', 'Source Titles']);
+  assert.deepEqual(workbook.worksheets.map(sheet => sheet.name), ['Website Report', 'Ranked Analysis', 'Source Titles']);
   const ranked = workbook.getWorksheet('Ranked Analysis');
   const sourceSheet = workbook.getWorksheet('Source Titles');
   assert.deepEqual(ranked.getRow(1).values.slice(1), ['Rank', 'Type', 'Phrase/Keyword', 'Number of Titles']);
@@ -35,6 +35,7 @@ test('exports all ranked results and all source titles into the two requested sh
 test('exports an empty completed crawl with valid header-only worksheets', async () => {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(await createAnalysisWorkbook({ website: 'https://example.com', totalTitles: 0, rankedAnalysis: [], sourceTitles: [], warnings: [] }));
-  assert.equal(workbook.worksheets.length, 2);
-  assert.ok(workbook.worksheets.every(sheet => sheet.rowCount === 1));
+  assert.equal(workbook.worksheets.length, 3);
+  assert.ok(workbook.worksheets.slice(1).every(sheet => sheet.rowCount === 1));
+  assert.ok(workbook.getWorksheet('Website Report').rowCount > 10);
 });
