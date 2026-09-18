@@ -1,0 +1,17 @@
+extension/config.js
+  h_87ad3c52b230b1 2
+extension/manifest.json
+  h_87ad3c52b230b1 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "autter_version": "1.6.9",
+  "base_commit_sha": "43769a0f3e0545be64796acf2c870423ff5bf59a",
+  "branch": "main",
+  "prompts": {},
+  "humans": {
+    "h_87ad3c52b230b1": {
+      "author": "Aditya Bhosale <adityabhosale4388@gmail.com>"
+    }
+  }
+}
