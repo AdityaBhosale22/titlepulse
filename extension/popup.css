@@ -45,6 +45,9 @@ h2 { font-size: 13px; font-weight: 650; margin: 0; }
 .total-label { color: var(--muted); font-size: 12px; }
 .result-state { font-size: 11px; color: var(--accent); background: var(--soft); padding: 3px 8px; border-radius: 4px; }
 .result-site { margin: 9px 0 0; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.export-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.export-line > span, .export-status { font-size: 11px; color: var(--muted); }
+.export-status.error { color: var(--error); }
 .count-note { font-size: 11px; color: var(--muted); margin: 15px 0 21px; line-height: 1.65; }
 .result-section { margin-top: 21px; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; padding-bottom: 9px; border-bottom: 1px solid var(--line); }

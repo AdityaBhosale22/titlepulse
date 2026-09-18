@@ -7,6 +7,9 @@ let busy = false;
 let activeJob = null;
 let timer;
 let pollFailures = 0;
+let exporting = false;
+let completedResult = null;
+let analysisDeadline = 0;
 const storage = {
   async get() { if (isExtension) return (await chrome.storage.local.get('titlepulse')).titlepulse; try { return JSON.parse(localStorage.getItem('titlepulse')); } catch { return null; } },
   async set(value) { if (isExtension) await chrome.storage.local.set({ titlepulse: value }); else localStorage.setItem('titlepulse', JSON.stringify(value)); },
@@ -14,7 +17,8 @@ const storage = {
 
 function setBusy(value) {
   busy = value;
-  $('analyze').disabled = value;
+  $('analyze').disabled = value || exporting;
+  $('export-excel').disabled = value || exporting || !completedResult;
   $('website').disabled = value;
   $('detect').disabled = value;
   $('analyze').replaceChildren(document.createTextNode(value ? 'Analyzing…' : 'Analyze website'));
@@ -48,11 +52,11 @@ function showRanking(id, items) {
   $(id).replaceChildren(...rows);
   $(`${id}-empty`).hidden = rows.length > 0;
 }
-function showPatterns(items) {
+function showPatterns(items, id = 'phrases') {
   const rows = items.slice(0, 10).map(item => {
     const row = document.createElement('li');
     const term = document.createElement('span'); term.className = 'term'; term.textContent = item.label || item.term;
-    const count = document.createElement('span'); count.className = 'count'; count.textContent = `${item.count} titles`;
+    const count = document.createElement('span'); count.className = 'count'; count.textContent = `${item.count} ${item.count === 1 ? 'title' : 'titles'}`;
     const matches = document.createElement('ul'); matches.className = 'matching-titles'; matches.tabIndex = 0;
     matches.setAttribute('aria-label', `Titles matching ${item.label || item.term}`);
     for (const title of item.matchingTitles || []) {
@@ -61,15 +65,19 @@ function showPatterns(items) {
     row.append(term, count, matches);
     return row;
   });
-  $('phrases').replaceChildren(...rows);
-  $('phrases-empty').hidden = rows.length > 0;
+  $(id).replaceChildren(...rows);
+  $(`${id}-empty`).hidden = rows.length > 0;
 }
 function showResults(result) {
+  completedResult = result;
+  $('export-excel').disabled = exporting;
+  $('export-status').hidden = true;
   $('results').hidden = false;
   $('total').textContent = result.totalTitles;
   $('result-state').textContent = result.partial ? 'Partial results' : 'Complete';
-  $('result-site').textContent = new URL(result.website).hostname;
+  $('result-site').textContent = new URL(result.website).hostname + (result.stats ? ` · ${result.stats.checked} pages checked, ${result.stats.failed} failed` : '');
   showPatterns(result.phrases);
+  showPatterns(result.longTails || [], 'long-tails');
   showRanking('keywords', result.keywords);
   $('keyword-details').hidden = !result.keywords.length;
   $('keyword-details').open = false;
@@ -77,13 +85,19 @@ function showResults(result) {
   $('warnings').open = false;
   $('warning-list').replaceChildren(...result.warnings.map(warning => { const li = document.createElement('li'); li.textContent = warning; return li; }));
   if (!result.totalTitles) status('No article titles found', 'Try the website’s blog URL. The site may require JavaScript, block crawling, or have no discoverable articles.');
-  else if (!result.phrases.length) status('No recurring title patterns', `We analyzed ${result.totalTitles} titles, but no meaningful 2–4 word patterns appeared in at least two titles.${result.partial ? ' Some pages could not be included; see “About these results”.' : ''}`);
+  else if (!result.phrases.length && !result.longTails?.length) status('No recurring title patterns', `We analyzed ${result.totalTitles} titles, but found no recurring patterns or sufficiently specific long-tail phrases.${result.partial ? ' Some pages could not be included; see “About these results”.' : ''}`);
   else if (result.partial) status('Analysis ready, with some gaps', 'Some pages could not be included. See “About these results” for details.');
   else $('status-panel').hidden = true;
 }
 async function handleJob(job) {
   activeJob = job.id;
   if (job.status === 'running') {
+    analysisDeadline ||= Math.min(Date.now() + 120000, Number(job.deadlineAt) || Date.now() + 120000);
+    if (Date.now() >= analysisDeadline) {
+      setBusy(false);
+      status('Analysis timed out', 'The backend did not finish in time. Try again or enter a more specific blog URL.', { error: true });
+      return;
+    }
     setBusy(true);
     const titles = { discovering: 'Discovering articles', crawling: 'Reading article titles', analyzing: 'Finding recurring topics' };
     status(titles[job.progress.phase] || 'Analyzing website', job.progress.message, { loading: true });
@@ -126,19 +140,57 @@ function validate(value) {
 }
 $('analyze-form').addEventListener('submit', async event => {
   event.preventDefault();
-  if (busy) return;
+  if (busy || exporting) return;
   let url;
   try { url = validate($('website').value); }
   catch (error) { $('input-error').textContent = error.message; $('input-error').hidden = false; $('website').setAttribute('aria-invalid', 'true'); $('website').focus(); return; }
-  clearTimeout(timer); pollFailures = 0;
+  clearTimeout(timer); pollFailures = 0; analysisDeadline = 0;
   $('input-error').hidden = true; $('website').removeAttribute('aria-invalid');
   $('results').hidden = true;
+  completedResult = null;
   setBusy(true); status('Starting analysis', 'Looking for article titles on your website…', { loading: true });
   try {
     const job = await request('/api/analyses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
     await storage.set({ url, id: job.id }).catch(() => {});
     await handleJob(job);
   } catch (error) { setBusy(false); status('Couldn’t start analysis', error.message, { error: true }); }
+});
+$('export-excel').addEventListener('click', async () => {
+  if (busy || exporting || !completedResult || !activeJob) return;
+  exporting = true;
+  setBusy(false);
+  $('export-excel').textContent = 'Exporting…';
+  $('export-status').hidden = false;
+  $('export-status').classList.remove('error');
+  $('export-status').textContent = 'Preparing all ranked results and source titles…';
+  try {
+    let response;
+    try { response = await fetch(`${api}/api/analyses/${activeJob}/export`, { signal: AbortSignal.timeout(30000) }); }
+    catch { throw new Error('Could not download the workbook. Check the backend connection and try again.'); }
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || 'Excel export failed. Please try again.');
+    }
+    if (!response.headers.get('content-type')?.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')) throw new Error('The backend returned an unexpected export. Please update the backend and try again.');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const host = new URL(completedResult.website).hostname.replace(/[^a-z0-9.-]/gi, '-');
+    link.href = url;
+    link.download = `titlepulse-${host}${completedResult.partial ? '-partial' : ''}.xlsx`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    $('export-status').textContent = completedResult.partial ? 'Download started. This workbook contains partial crawl results.' : 'Download started. All analyzed results and source titles are included.';
+  } catch (error) {
+    $('export-status').classList.add('error');
+    $('export-status').textContent = error.message;
+  } finally {
+    exporting = false;
+    $('export-excel').textContent = 'Export Excel';
+    setBusy(busy);
+  }
 });
 $('website').addEventListener('input', () => { $('input-error').hidden = true; $('website').removeAttribute('aria-invalid'); });
 $('retry').addEventListener('click', () => { pollFailures = 0; setBusy(true); poll(); });

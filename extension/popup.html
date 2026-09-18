@@ -34,12 +34,15 @@
     <section id="results" aria-label="Analysis results" hidden>
       <div class="summary"><div><span id="total" class="total">0</span><span class="total-label">titles analyzed</span></div><span id="result-state" class="result-state">Complete</span></div>
       <p class="result-site" id="result-site"></p>
+      <div class="export-line"><button id="export-excel" type="button" class="text-button" disabled>Export Excel</button><span>All results + source titles</span></div>
+      <p id="export-status" class="export-status" role="status" aria-live="polite" hidden></p>
       <p class="count-note">Top patterns used in at least 2 article titles.<br>Matching titles are shown under each pattern.</p>
       <section class="result-section" aria-labelledby="phrases-heading"><div class="section-heading"><h2 id="phrases-heading">Recurring title patterns</h2></div><ol id="phrases" class="rankings patterns"></ol><p id="phrases-empty" class="empty" hidden>No recurring 2–4 word patterns found.</p></section>
+      <section class="result-section" aria-labelledby="long-tails-heading"><div class="section-heading"><h2 id="long-tails-heading">Long-tail keywords</h2></div><p class="count-note">Specific topics and search intent from your titles.<br>Can appear in just one article. No search-demand estimates.</p><ol id="long-tails" class="rankings patterns"></ol><p id="long-tails-empty" class="empty" hidden>No sufficiently specific long-tail phrases found.</p></section>
       <details id="keyword-details"><summary>Explore individual keywords</summary><section class="result-section" aria-labelledby="keywords-heading"><div class="section-heading"><h2 id="keywords-heading">Top keywords</h2><span>Titles</span></div><ol id="keywords" class="rankings"></ol><p id="keywords-empty" class="empty" hidden>No recurring keywords found.</p></section></details>
       <details id="warnings" hidden><summary>About these results</summary><ul id="warning-list"></ul></details>
     </section>
-    <footer>Title patterns, at a glance.<span>2–4 words per pattern</span></footer>
+    <footer>Title patterns, at a glance.<span>Based only on article titles</span></footer>
   </main>
 </body>
 </html>
