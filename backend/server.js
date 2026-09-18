@@ -3,13 +3,22 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { crawlWebsite } from './crawler.js';
-import { normalizeUrl, UserError } from './network.js';
+import { normalizeUrl, sameSite, UserError } from './network.js';
+import { createAnalysisWorkbook, XLSX_TYPE } from './export.js';
 
-export function createApp({ crawl = crawlWebsite, now = Date.now } = {}) {
+// Full export data stays in the job cache; the UI only receives top results.
+function publicJob(job) {
+  if (!job.result) return job;
+  const { rankedAnalysis, sourceTitles, ...result } = job.result;
+  return { ...job, result };
+}
+
+export function createApp({ crawl = crawlWebsite, now = Date.now, jobTimeout = 110000 } = {}) {
   const app = express();
   const jobs = new Map();
   const byUrl = new Map();
   const rate = new Map();
+  const exports = new WeakMap();
   const ttl = 15 * 60 * 1000;
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -38,26 +47,47 @@ export function createApp({ crawl = crawlWebsite, now = Date.now } = {}) {
       const url = normalizeUrl(req.body?.url);
       cleanup();
       const existing = jobs.get(byUrl.get(url));
-      if (existing && existing.status !== 'error') return res.status(existing.status === 'complete' ? 200 : 202).json(existing);
+      if (existing && existing.status !== 'error') return res.status(existing.status === 'complete' ? 200 : 202).json(publicJob(existing));
+      if ([...jobs.values()].some(job => job.status === 'running' && sameSite(job.url, url))) throw new UserError('An analysis of this website is already running. Reopen its original URL to resume it, or wait for it to finish.', 409);
       const bucket = rate.get(req.ip) || { start: now(), count: 0 };
       if (bucket.count >= 10 || rate.size >= 10000) throw new UserError('Too many requests. Please try again in a minute.', 429);
       if ([...jobs.values()].filter(job => job.status === 'running').length >= 2) throw new UserError('The analyzer is busy. Please try again shortly.', 429);
       if (jobs.size >= 200) throw new UserError('The analyzer is at capacity. Please try again later.', 429);
       bucket.count++; rate.set(req.ip, bucket);
-      const job = { id: randomUUID(), url, status: 'running', progress: { phase: 'discovering', message: 'Starting website discovery…', titlesAnalyzed: 0 }, createdAt: now() };
+      const job = { id: randomUUID(), url, status: 'running', progress: { phase: 'discovering', message: 'Starting website discovery…', titlesAnalyzed: 0 }, createdAt: now(), deadlineAt: now() + jobTimeout };
       jobs.set(job.id, job); byUrl.set(url, job.id);
       res.status(202).json(job);
-      Promise.resolve().then(() => crawl(url, progress => { job.progress = progress; }))
-        .then(result => { job.status = 'complete'; job.result = result; })
-        .catch(error => { job.status = 'error'; job.error = error.message || 'Analysis failed. Please try again.'; })
-        .finally(() => { job.finishedAt = now(); });
+      const controller = new AbortController();
+      const watchdog = setTimeout(() => {
+        controller.abort(); job.status = 'error'; job.error = 'Analysis exceeded its time limit. Please try a more specific blog URL.'; job.finishedAt = now();
+      }, jobTimeout);
+      watchdog.unref();
+      Promise.resolve().then(() => crawl(url, progress => { if (job.status === 'running') job.progress = progress; }, { signal: controller.signal }))
+        .then(result => { if (job.status === 'running') { job.status = 'complete'; job.result = result; } })
+        .catch(error => { if (job.status === 'running') { job.status = 'error'; job.error = error.message || 'Analysis failed. Please try again.'; } })
+        .finally(() => { clearTimeout(watchdog); job.finishedAt ??= now(); });
     } catch (error) { next(error); }
   });
   app.get('/api/analyses/:id', (req, res) => {
     cleanup();
     const job = jobs.get(req.params.id);
     if (!job) return res.status(404).json({ error: 'This analysis expired or the backend restarted. Analyze the website again.' });
-    res.json(job);
+    res.json(publicJob(job));
+  });
+  app.get('/api/analyses/:id/export', async (req, res, next) => {
+    try {
+      cleanup();
+      const job = jobs.get(req.params.id);
+      if (!job) throw new UserError('This analysis expired or the backend restarted. Analyze the website again before exporting.', 404);
+      if (job.status !== 'complete') throw new UserError('The analysis must finish successfully before it can be exported.', 409);
+      if (!exports.has(job)) {
+        const pending = createAnalysisWorkbook(job.result).catch(error => { exports.delete(job); throw error; });
+        exports.set(job, pending);
+      }
+      const buffer = await exports.get(job);
+      const host = new URL(job.url).hostname.replace(/[^a-z0-9.-]/gi, '-');
+      res.type(XLSX_TYPE).attachment(`titlepulse-${host}${job.result.partial ? '-partial' : ''}.xlsx`).send(buffer);
+    } catch (error) { next(error); }
   });
   const extension = fileURLToPath(new URL('../extension/', import.meta.url));
   app.use(express.static(extension, { index: 'popup.html' }));

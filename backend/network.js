@@ -3,6 +3,7 @@ import dns from 'node:dns';
 import http from 'node:http';
 import https from 'node:https';
 import ipaddr from 'ipaddr.js';
+import { setTimeout as delay } from 'node:timers/promises';
 
 export class UserError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
@@ -27,7 +28,7 @@ export function normalizeUrl(input, base) {
     throw new UserError('Only public websites can be analyzed. Local and private addresses are not supported.');
   }
   url.hash = '';
-  for (const key of [...url.searchParams.keys()]) if (/^(utm_.+|fbclid|gclid|ref)$/i.test(key)) url.searchParams.delete(key);
+  for (const key of [...url.searchParams.keys()]) if (/^(utm_.+|fbclid|gclid|dclid|msclkid|mc_cid|mc_eid|ref|ref_src)$/i.test(key)) url.searchParams.delete(key);
   url.searchParams.sort();
   url.pathname = url.pathname.replace(/\/{2,}/g, '/').replace(/\/$/, '') || '/';
   return url.href;
@@ -54,18 +55,35 @@ function safeLookup(hostname, options, callback) {
 const httpAgent = new http.Agent({ lookup: safeLookup, keepAlive: true, maxSockets: 6 });
 const httpsAgent = new https.Agent({ lookup: safeLookup, keepAlive: true, maxSockets: 6 });
 
-export async function fetchText(input, { signal, site = input, requester = axios.get } = {}) {
+export async function fetchText(input, { signal, site = input, requester = axios.get, sleep = (ms, signal) => delay(ms, undefined, { signal }), beforeRequest = async () => {}, allowUrl = () => true } = {}) {
   let url = normalizeUrl(input);
   const requestSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(8000)]) : AbortSignal.timeout(8000);
   for (let hop = 0; hop <= 4; hop++) {
     if (!sameSite(url, site)) throw new Error('Cross-site redirect skipped.');
-    const response = await requester(url, {
+    if (!allowUrl(url)) throw new Error('Blocked by robots.txt');
+    let response;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await beforeRequest(requestSignal);
+        response = await requester(url, {
       signal: requestSignal, timeout: 8000, maxRedirects: 0, proxy: false,
       httpAgent, httpsAgent, responseType: 'text', transformResponse: [data => data],
       maxContentLength: 2 * 1024 * 1024, maxBodyLength: 2 * 1024 * 1024,
       headers: { 'User-Agent': 'TitlePulse/1.0 (title analysis)', Accept: 'text/html,application/xhtml+xml,application/xml,text/xml,text/plain;q=0.8' },
       validateStatus: status => status >= 200 && status < 400,
-    });
+        });
+        break;
+      } catch (error) {
+        const status = error.response?.status;
+        const retryable = [429, 500, 502, 503, 504].includes(status) || ['ECONNRESET', 'ETIMEDOUT', 'ECONNABORTED', 'EAI_AGAIN'].includes(error.code);
+        if (attempt || !retryable || requestSignal.aborted) throw error;
+        const retryAfter = error.response?.headers?.['retry-after'];
+        const wait = retryAfter == null ? 600 : /^\d+(\.\d+)?$/.test(String(retryAfter)) ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now();
+        // Never retry earlier than Retry-After, or wait outside the request budget.
+        if (!Number.isFinite(wait) || wait > 6000) throw error;
+        await sleep(Math.max(600, wait), requestSignal);
+      }
+    }
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       if (!response.headers.location) throw new Error('Redirect has no destination.');
       const destination = new URL(response.headers.location, url);
