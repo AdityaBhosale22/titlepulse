@@ -1,0 +1,114 @@
+extension/popup.js
+  s_e794ed4f8e6113::t_ce9873afe2b08c 13-15,25,78,112,201-232,251
+.env.example
+  s_e794ed4f8e6113::t_ce9873afe2b08c 3-7
+test/server.test.js
+  s_e794ed4f8e6113::t_bb9c39120c860b 6-37
+test/popup.test.js
+  s_e794ed4f8e6113::t_c38e4e78ff744a 6,24,30
+  s_e794ed4f8e6113::t_bb9c39120c860b 7-23,25
+README.md
+  s_e794ed4f8e6113::t_bb9c39120c860b 159-164
+backend/server.js
+  s_e794ed4f8e6113::t_ce9873afe2b08c 8-9,18,24,34,96-120
+extension/popup.html
+  s_e794ed4f8e6113::t_ce9873afe2b08c 39-41
+backend/sheets.js
+  s_e794ed4f8e6113::t_ce9873afe2b08c 1-19
+test/sheets.test.js
+  s_e794ed4f8e6113::t_bb9c39120c860b 1-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "autter_version": "1.6.9",
+  "base_commit_sha": "3cbee8bcb3d0d65aadd906ca7f12d41bb89ae512",
+  "branch": "main",
+  "prompts": {
+    "s_e794ed4f8e6113": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b38e-f03b-76b1-9c1b-f610ffc64f28",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Aditya Bhosale <adityabhosale4388@gmail.com>",
+      "messages_url": "cas:8cb58199cd38893dbd5a3f25559f22d6cefaec6fb119637fea096876edc8646b",
+      "total_additions": 176,
+      "total_deletions": 4,
+      "accepted_lines": 176,
+      "overriden_lines": 0
+    }
+  },
+  "sessions": {
+    "s_e794ed4f8e6113": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b38e-f03b-76b1-9c1b-f610ffc64f28",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Aditya Bhosale <adityabhosale4388@gmail.com>",
+      "messages_url": "cas:8cb58199cd38893dbd5a3f25559f22d6cefaec6fb119637fea096876edc8646b",
+      "stats": {
+        "total_additions": 176,
+        "total_deletions": 4,
+        "accepted_lines": 176,
+        "overriden_lines": 0,
+        "files": {
+          ".env.example": {
+            "total_additions": 5,
+            "total_deletions": 0,
+            "accepted_lines": 5,
+            "overriden_lines": 0
+          },
+          "README.md": {
+            "total_additions": 6,
+            "total_deletions": 0,
+            "accepted_lines": 6,
+            "overriden_lines": 0
+          },
+          "backend/server.js": {
+            "total_additions": 30,
+            "total_deletions": 2,
+            "accepted_lines": 30,
+            "overriden_lines": 0
+          },
+          "backend/sheets.js": {
+            "total_additions": 19,
+            "total_deletions": 0,
+            "accepted_lines": 19,
+            "overriden_lines": 0
+          },
+          "extension/popup.html": {
+            "total_additions": 3,
+            "total_deletions": 0,
+            "accepted_lines": 3,
+            "overriden_lines": 0
+          },
+          "extension/popup.js": {
+            "total_additions": 39,
+            "total_deletions": 2,
+            "accepted_lines": 39,
+            "overriden_lines": 0
+          },
+          "test/popup.test.js": {
+            "total_additions": 21,
+            "total_deletions": 0,
+            "accepted_lines": 21,
+            "overriden_lines": 0
+          },
+          "test/server.test.js": {
+            "total_additions": 32,
+            "total_deletions": 0,
+            "accepted_lines": 32,
+            "overriden_lines": 0
+          },
+          "test/sheets.test.js": {
+            "total_additions": 21,
+            "total_deletions": 0,
+            "accepted_lines": 21,
+            "overriden_lines": 0
+          }
+        }
+      }
+    }
+  }
+}
