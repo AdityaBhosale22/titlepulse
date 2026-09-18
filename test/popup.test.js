@@ -30,6 +30,33 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 const result = overrides => ({ website: 'https://example.com/', totalTitles: 20, phrases: [{ term: 'content strategy', count: 8 }], keywords: [{ term: 'content', count: 12 }], partial: false, warnings: [], ...overrides });
 registerSheetTests();
 
+test('Use current tab refreshes the full address including query and fragment', async t => {
+  const ui = await setup(t, { extension:true });
+  const address = 'https://blog.example.com/marketing/?topic=email&sort=new#articles';
+  ui.dom.window.chrome.tabs.query = async () => [{url:address}];
+  ui.get('website').value='https://old.example.com';
+  ui.get('detect').click(); await flush();
+  assert.equal(ui.get('website').value,address);
+  ui.submit(); await flush();
+  assert.equal(JSON.parse(ui.calls[0][1].body).url,address.split('#')[0]);
+});
+test('partial results retain badge and warnings without an extra success banner', async t => {
+  const ui = await setup(t, {fetcher:async()=>({ok:true,json:async()=>({id:'job',status:'complete',result:result({partial:true,warnings:['Some pages timed out.']})})})});
+  ui.get('website').value='example.com';ui.submit();await flush();
+  assert.equal(ui.get('status-panel').hidden,true);
+  assert.equal(ui.get('result-state').textContent,'Partial results');
+  assert.equal(ui.get('warnings').hidden,false);
+  assert.match(ui.get('warning-list').textContent,/timed out/);
+});
+test('Use current tab reports unsupported browser pages without replacing the input', async t => {
+  const ui = await setup(t, {extension:true});
+  ui.dom.window.chrome.tabs.query = async()=>[{url:'chrome://extensions/'}];
+  ui.get('website').value='https://example.org/blog';
+  ui.get('detect').click();await flush();
+  assert.equal(ui.get('website').value,'https://example.org/blog');
+  assert.equal(ui.get('input-error').hidden,false);
+});
+
 test('password submit enables on input and saves with Enter/form submission', async t => {
   let finish;
   const ui=await setup(t,{fetcher:async url => {
@@ -160,10 +187,10 @@ test('popup explains backend connection failures', async t => {
   assert.match(ui.get('status-message').textContent, /backend is running/);
   assert.equal(ui.get('analyze').disabled, false);
 });
-test('extension detects current origin and stores a completed job', async t => {
+test('extension detects full current URL and stores a completed job', async t => {
   const ui = await setup(t, { extension: true });
   assert.equal(ui.get('detect').hidden, false);
-  assert.equal(ui.get('website').value, 'https://example.org');
+  assert.equal(ui.get('website').value, 'https://example.org/blog/story');
   ui.submit(); await flush();
   assert.equal(ui.get('results').hidden, false);
   assert.ok(ui.calls[0][0].startsWith('http://127.0.0.1:3000/api/'));

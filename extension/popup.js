@@ -92,7 +92,6 @@ function showResults(result) {
   $('warning-list').replaceChildren(...result.warnings.map(warning => { const li = document.createElement('li'); li.textContent = warning; return li; }));
   if (!result.totalTitles) status('No article titles found', 'Try the website’s blog URL. The site may require JavaScript, block crawling, or have no discoverable articles.');
   else if (!result.phrases.length && !result.longTails?.length) status('No recurring title patterns', `We analyzed ${result.totalTitles} titles, but found no recurring patterns or sufficiently specific long-tail phrases.${result.partial ? ' Some pages could not be included; see “About these results”.' : ''}`);
-  else if (result.partial) status('Analysis ready, with some gaps', 'Some pages could not be included. See “About these results” for details.');
   else $('status-panel').hidden = true;
 }
 async function handleJob(job) {
@@ -254,7 +253,7 @@ async function detect({ silent = false } = {}) {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.url || !/^https?:/.test(tab.url)) throw new Error('Open a public website tab, or enter its URL above.');
-    $('website').value = new URL(tab.url).origin;
+    $('website').value = tab.url;
     $('input-error').hidden = true;
     $('website').removeAttribute('aria-invalid');
   } catch (error) { if (!silent) { $('input-error').textContent = error.message; $('input-error').hidden = false; } }
