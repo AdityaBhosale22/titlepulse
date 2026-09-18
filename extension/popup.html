@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>TitlePulse · Website title analyzer</title>
+  <link rel="stylesheet" href="popup.css">
+  <script type="module" src="popup.js"></script>
+</head>
+<body>
+  <main>
+    <header class="brand"><a href="popup.html" aria-label="TitlePulse home">Title<span>Pulse</span><span class="brand-mark" aria-hidden="true">↗</span></a><span class="descriptor">TITLE ANALYZER</span></header>
+    <section class="intro">
+      <h1>Find the themes.<br>Skip the reading.</h1>
+      <p>Find the phrases a website repeats in its article titles, with the matches to back them up.</p>
+    </section>
+    <form id="analyze-form" novalidate>
+      <div class="label-line"><label for="website">Website URL</label><button id="detect" type="button" class="text-button" hidden>Use current tab</button></div>
+      <input id="website" name="website" type="text" inputmode="url" autocomplete="url" spellcheck="false" placeholder="example.com" aria-describedby="input-error" maxlength="2048" required>
+      <p id="input-error" class="input-error" role="alert" hidden></p>
+      <button class="primary" id="analyze" type="submit">Analyze website <span aria-hidden="true">↗</span></button>
+    </form>
+    <section id="status-panel" class="status-panel" aria-live="polite" aria-atomic="true" hidden>
+      <div class="status-heading"><span id="spinner" class="spinner" aria-hidden="true" hidden></span><h2 id="status-title"></h2></div>
+      <p id="status-message"></p>
+      <button id="retry" class="text-button" type="button" hidden>Reconnect to analysis</button>
+    </section>
+    <section id="welcome" class="welcome">
+      <span class="welcome-symbol" aria-hidden="true">Aa</span>
+      <h2>A little clarity for your content research.</h2>
+      <p>Enter a website to find its recurring topics.<br>Only titles count. No article-body analysis.</p>
+    </section>
+    <section id="results" aria-label="Analysis results" hidden>
+      <div class="summary"><div><span id="total" class="total">0</span><span class="total-label">titles analyzed</span></div><span id="result-state" class="result-state">Complete</span></div>
+      <p class="result-site" id="result-site"></p>
+      <p class="count-note">Top patterns used in at least 2 article titles.<br>Matching titles are shown under each pattern.</p>
+      <section class="result-section" aria-labelledby="phrases-heading"><div class="section-heading"><h2 id="phrases-heading">Recurring title patterns</h2></div><ol id="phrases" class="rankings patterns"></ol><p id="phrases-empty" class="empty" hidden>No recurring 2–4 word patterns found.</p></section>
+      <details id="keyword-details"><summary>Explore individual keywords</summary><section class="result-section" aria-labelledby="keywords-heading"><div class="section-heading"><h2 id="keywords-heading">Top keywords</h2><span>Titles</span></div><ol id="keywords" class="rankings"></ol><p id="keywords-empty" class="empty" hidden>No recurring keywords found.</p></section></details>
+      <details id="warnings" hidden><summary>About these results</summary><ul id="warning-list"></ul></details>
+    </section>
+    <footer>Title patterns, at a glance.<span>2–4 words per pattern</span></footer>
+  </main>
+</body>
+</html>
