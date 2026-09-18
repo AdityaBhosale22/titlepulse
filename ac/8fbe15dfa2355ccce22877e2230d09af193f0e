@@ -1,0 +1,67 @@
+README.md
+  s_e794ed4f8e6113::t_05dc893adf408b 159-160
+backend/crawler.js
+  s_e794ed4f8e6113::t_42d835b33f42b4 128,133,185,221,223-224,228
+  s_e794ed4f8e6113::t_45940e3362ba42 15-23,26,36,39-41,53-54,62-64,82,100-107,112-118,122,176,178-184,186,191-192,198-199,208,226,231-233,235-242
+test/discovery.test.js
+  s_e794ed4f8e6113::t_05dc893adf408b 1-23,25-31,33-37,39,41-67
+  s_e794ed4f8e6113::t_fc65003803bb2e 24,32,38,40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "autter_version": "1.6.9",
+  "base_commit_sha": "ac8fbe15dfa2355ccce22877e2230d09af193f0e",
+  "branch": "main",
+  "prompts": {
+    "s_e794ed4f8e6113": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b38e-f03b-76b1-9c1b-f610ffc64f28",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Aditya Bhosale <adityabhosale4388@gmail.com>",
+      "messages_url": "cas:7873f911e88e57d4d3d58b8aef522b4642e5b5955863995943c24fed77d77411",
+      "total_additions": 143,
+      "total_deletions": 31,
+      "accepted_lines": 138,
+      "overriden_lines": 0
+    }
+  },
+  "sessions": {
+    "s_e794ed4f8e6113": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b38e-f03b-76b1-9c1b-f610ffc64f28",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Aditya Bhosale <adityabhosale4388@gmail.com>",
+      "messages_url": "cas:7873f911e88e57d4d3d58b8aef522b4642e5b5955863995943c24fed77d77411",
+      "stats": {
+        "total_additions": 143,
+        "total_deletions": 31,
+        "accepted_lines": 138,
+        "overriden_lines": 0,
+        "files": {
+          "README.md": {
+            "total_additions": 2,
+            "total_deletions": 0,
+            "accepted_lines": 2,
+            "overriden_lines": 0
+          },
+          "backend/crawler.js": {
+            "total_additions": 70,
+            "total_deletions": 27,
+            "accepted_lines": 69,
+            "overriden_lines": 0
+          },
+          "test/discovery.test.js": {
+            "total_additions": 71,
+            "total_deletions": 4,
+            "accepted_lines": 67,
+            "overriden_lines": 0
+          }
+        }
+      }
+    }
+  }
+}
