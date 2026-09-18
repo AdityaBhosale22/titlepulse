@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../backend/server.js';
+import { analyzeTitles } from '../backend/analyzer.js';
+import ExcelJS from 'exceljs';
+import { setTimeout as delay } from 'node:timers/promises';
 
 async function serve(t, options) {
   const server = createApp(options).listen(0, '127.0.0.1');
@@ -44,4 +47,61 @@ test('records errors, allows retries and expires results', async t => {
   assert.notEqual(retry.id, first.id);
   clock += 16 * 60 * 1000;
   assert.equal((await fetch(`${base}/api/analyses/${first.id}`)).status, 404);
+});
+
+test('exports cached full results while keeping source titles out of normal JSON responses', async t => {
+  const sourceTitles = Array.from({ length: 14 }, (_, index) => ({ title: `Digital signature software for industry${String.fromCharCode(97 + index)}`, url: `https://example.com/blog/${index}` }));
+  let crawls = 0;
+  const base = await serve(t, { crawl: async () => { crawls++; return { website: 'https://example.com/', ...analyzeTitles(sourceTitles.map(row => row.title)), sourceTitles, partial: true, warnings: ['Time limit reached.'] }; } });
+  const started = await (await post(base, { url: 'example.com' })).json();
+  const job = await (await fetch(`${base}/api/analyses/${started.id}`)).json();
+  assert.equal(job.result.longTails.length, 10);
+  assert.equal('rankedAnalysis' in job.result, false);
+  assert.equal('sourceTitles' in job.result, false);
+  const cached = await (await post(base, { url: 'example.com' })).json();
+  assert.equal('sourceTitles' in cached.result, false);
+  const response = await fetch(`${base}/api/analyses/${started.id}/export`);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /spreadsheetml.sheet/);
+  assert.match(response.headers.get('content-disposition'), /titlepulse-example.com-partial.xlsx/);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(Buffer.from(await response.arrayBuffer()));
+  assert.equal(workbook.getWorksheet('Source Titles').rowCount, 15);
+  const ranked = workbook.getWorksheet('Ranked Analysis');
+  let longTailRows = 0;
+  ranked.eachRow(row => { if (row.getCell(2).value === 'Long-tail') longTailRows++; });
+  assert.equal(longTailRows, 14);
+  assert.equal((await fetch(`${base}/api/analyses/${started.id}/export`)).status, 200);
+  assert.equal(crawls, 1);
+});
+
+test('export explains pending, failed and expired jobs', async t => {
+  const base = await serve(t, { crawl: () => new Promise(() => {}) });
+  const job = await (await post(base, { url: 'example.com' })).json();
+  assert.equal((await fetch(`${base}/api/analyses/${job.id}/export`)).status, 409);
+  assert.equal((await fetch(`${base}/api/analyses/missing/export`)).status, 404);
+  const failedBase = await serve(t, { crawl: async () => { throw new Error('Unavailable'); } });
+  const failed = await (await post(failedBase, { url: 'example.com' })).json();
+  assert.equal((await fetch(`${failedBase}/api/analyses/${failed.id}/export`)).status, 409);
+});
+
+test('watchdog terminates hung jobs and ignores late results', async t => {
+  let complete;
+  const base = await serve(t, { jobTimeout: 30, crawl: () => new Promise(resolve => { complete = resolve; }) });
+  const job = await (await post(base, { url: 'example.com' })).json();
+  await delay(60);
+  let state = await (await fetch(`${base}/api/analyses/${job.id}`)).json();
+  assert.equal(state.status, 'error');
+  assert.match(state.error, /time limit/);
+  complete({ totalTitles: 123 });
+  await delay(1);
+  state = await (await fetch(`${base}/api/analyses/${job.id}`)).json();
+  assert.equal(state.status, 'error');
+  assert.equal(state.result, undefined);
+});
+
+test('different URLs on the same site cannot launch concurrent crawls', async t => {
+  const base = await serve(t, { crawl: () => new Promise(() => {}) });
+  assert.equal((await post(base, { url: 'https://example.com/blog' })).status, 202);
+  assert.equal((await post(base, { url: 'https://www.example.com/articles' })).status, 409);
 });

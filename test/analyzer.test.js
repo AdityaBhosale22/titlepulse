@@ -13,13 +13,13 @@ test('counts once per article and includes matching titles only for ranked patte
   assert.equal('titles' in result, false);
 });
 test('preserves internal stop words without inventing adjacency across punctuation', () => {
-  const result = analyzeTitles(['Growth for teams: software', 'Growth for teams: software']);
+  const result = analyzeTitles(['Growth for teams: software', 'Growth for teams: strategy']);
   assert.deepEqual(result.phrases.map(row => row.term), ['growth for teams']);
   assert.equal(analyzeTitles(['One unique title']).keywords.length, 0);
 });
 test('normalizes Unicode and hyphens, caps sections at ten results', () => {
   const titles = ['ＣＯＮＴＥＮＴ data-driven café design research growth analytics cloud software security engineering product commerce development', 'content data driven café design research growth analytics cloud software security engineering product commerce development'];
-  const result = analyzeTitles(titles);
+  const result = analyzeTitles([titles[0], titles[1] + ' tutorial']);
   assert.equal(result.keywords.length, 10);
   assert.equal(result.phrases.length, 10);
   assert.ok(result.phrases.some(row => row.term.includes('data driven')));
@@ -61,7 +61,7 @@ function fixtures(entries) {
     },
   };
 }
-test('deduplicates canonical URLs but counts separate articles with identical titles', async () => {
+test('deduplicates URLs and titles while retaining all distinct article sources', async () => {
   const origin = 'https://example.com';
   const fixture = fixtures({
     [origin + '/robots.txt']: 'User-agent: *\nDisallow: /blog/private',
@@ -75,8 +75,10 @@ test('deduplicates canonical URLs but counts separate articles with identical ti
   });
   const updates = [];
   const result = await crawlWebsite(origin, update => updates.push(update), fixture);
-  assert.equal(result.totalTitles, 3);
-  assert.ok(result.phrases.some(row => row.term === 'marketing strategy' && row.count === 3));
+  assert.equal(result.totalTitles, 2);
+  assert.equal(result.sourceTitles.length, 3);
+  assert.equal(result.stats.duplicateTitles, 1);
+  assert.ok(result.phrases.some(row => row.term === 'marketing strategy' && row.count === 2));
   assert.equal(fixture.calls.filter(url => url === origin + '/blog/content').length, 1);
   assert.equal(fixture.calls.includes(origin + '/blog/private'), false);
   assert.equal(result.partial, true);
@@ -109,7 +111,7 @@ test('analyzes every discovered article including patterns beyond the old 100-pa
   });
   const result = await crawlWebsite('example.com', () => {}, fixture);
   assert.equal(result.totalTitles, 105);
-  assert.equal(result.stats.checked, 105);
+  assert.equal(result.stats.checked, 106);
   assert.ok(result.phrases.some(row => row.term === 'how to create' && row.count === 5));
   assert.equal(result.partial, false);
 });

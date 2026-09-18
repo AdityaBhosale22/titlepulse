@@ -114,3 +114,60 @@ test('extension detects current origin and stores a completed job', async t => {
   assert.equal(ui.get('results').hidden, false);
   assert.ok(ui.calls[0][0].startsWith('http://127.0.0.1:3000/api/'));
 });
+
+test('shows specific long-tail matches even when there are no recurring patterns', async t => {
+  const tail = { term: 'choose digital signature software for small businesses', count: 1, matchingTitles: ['How to Choose Digital Signature Software for Small Businesses'] };
+  const ui = await setup(t, { fetcher: async () => ({ ok: true, json: async () => ({ id: 'job', status: 'complete', result: result({ phrases: [], longTails: [tail] }) }) }) });
+  ui.get('website').value = 'example.com'; ui.submit(); await flush();
+  assert.equal(ui.get('long-tails').querySelector('.term').textContent, tail.term);
+  assert.equal(ui.get('long-tails').querySelector('.count').textContent, '1 title');
+  assert.equal(ui.get('long-tails-empty').hidden, true);
+  assert.equal(ui.get('status-panel').hidden, true);
+  assert.equal(ui.get('export-excel').disabled, false);
+});
+
+test('downloads Excel from the full export endpoint and prevents duplicate export requests', async t => {
+  let release;
+  const ui = await setup(t, { fetcher: async path => path.endsWith('/export') ? new Promise(resolve => { release = resolve; }) : { ok: true, json: async () => ({ id: 'job', status: 'complete', result: result({ partial: true, warnings: ['Partial crawl'] }) }) } });
+  const downloads = [];
+  ui.dom.window.URL.createObjectURL = () => 'blob:export';
+  ui.dom.window.URL.revokeObjectURL = () => {};
+  ui.dom.window.HTMLAnchorElement.prototype.click = function () { downloads.push({ filename: this.download, url: this.href }); };
+  assert.equal(ui.get('export-excel').disabled, true);
+  ui.get('website').value = 'example.com'; ui.submit(); await flush();
+  ui.get('export-excel').click(); ui.get('export-excel').click(); await flush();
+  assert.equal(ui.calls.filter(([path]) => path.endsWith('/export')).length, 1);
+  assert.equal(ui.get('export-excel').disabled, true);
+  assert.equal(ui.get('analyze').disabled, true);
+  release({ ok: true, headers: { get: () => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }, blob: async () => new Blob(['xlsx']) });
+  await flush();
+  assert.deepEqual(downloads, [{ filename: 'titlepulse-example.com-partial.xlsx', url: 'blob:export' }]);
+  assert.match(ui.get('export-status').textContent, /partial crawl/);
+  assert.equal(ui.get('export-excel').disabled, false);
+  assert.equal(ui.get('analyze').disabled, false);
+});
+
+test('keeps results available after an export error and allows retry', async t => {
+  const ui = await setup(t, { fetcher: async path => path.endsWith('/export') ? { ok: false, json: async () => ({ error: 'Analysis expired. Analyze again before exporting.' }) } : { ok: true, json: async () => ({ id: 'job', status: 'complete', result: result() }) } });
+  ui.get('website').value = 'example.com'; ui.submit(); await flush();
+  ui.get('export-excel').click(); await flush();
+  assert.equal(ui.get('results').hidden, false);
+  assert.equal(ui.get('export-status').classList.contains('error'), true);
+  assert.match(ui.get('export-status').textContent, /Analysis expired/);
+  assert.equal(ui.get('export-excel').disabled, false);
+});
+
+test('popup stops analyzing when a restored job has exceeded its deadline', async t => {
+  const ui = await setup(t, { saved: { url: 'example.com', id: 'stuck' }, fetcher: async () => ({ ok: true, json: async () => ({ id: 'stuck', status: 'running', deadlineAt: Date.now() - 1000, progress: { phase: 'crawling', message: 'Still running' } }) }) });
+  assert.equal(ui.get('analyze').disabled, false);
+  assert.equal(ui.get('spinner').hidden, true);
+  assert.equal(ui.get('status-title').textContent, 'Analysis timed out');
+});
+
+test('reopening a running job resumes polling without submitting a new analysis', async t => {
+  const ui = await setup(t, { saved: { url: 'example.com', id: 'running' }, fetcher: async () => ({ ok: true, json: async () => ({ id: 'running', status: 'running', deadlineAt: Date.now() + 60000, progress: { phase: 'crawling', message: 'Checked 10 pages; 2 failed.' } }) }) });
+  assert.equal(ui.get('analyze').disabled, true);
+  assert.equal(ui.calls.length, 1);
+  assert.ok(ui.calls[0][0].endsWith('/api/analyses/running'));
+  assert.equal(ui.get('status-message').textContent, 'Checked 10 pages; 2 failed.');
+});
