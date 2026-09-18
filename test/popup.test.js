@@ -29,6 +29,38 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 const result = overrides => ({ website: 'https://example.com/', totalTitles: 20, phrases: [{ term: 'content strategy', count: 8 }], keywords: [{ term: 'content', count: 12 }], partial: false, warnings: [], ...overrides });
 registerSheetTests();
 
+test('password submit enables on input and saves with Enter/form submission', async t => {
+  let finish;
+  const ui=await setup(t,{fetcher:async url => {
+    if(url.endsWith('/sheets')) return new Promise(resolve => {finish=()=>resolve({ok:true,json:async()=>({status:'saved',tab:'example'})});});
+    return {ok:true,json:async()=>({id:'job',status:'complete',result:result()})};
+  }});
+  ui.get('website').value='example.com';ui.submit();await flush();
+  assert.equal(ui.get('sheet-submit').disabled,true);
+  ui.get('save-sheet').click();
+  assert.equal(ui.get('sheet-access').open,true);
+  ui.get('sheet-key').value='test-password';
+  ui.get('sheet-key').dispatchEvent(new ui.dom.window.Event('input'));
+  assert.equal(ui.get('sheet-submit').disabled,false);
+  const submit=()=>ui.get('sheet-form').dispatchEvent(new ui.dom.window.Event('submit',{bubbles:true,cancelable:true}));
+  submit();submit();await flush();
+  assert.equal(ui.calls.filter(([url])=>url.endsWith('/sheets')).length,1);
+  assert.equal(ui.get('sheet-submit').disabled,true);
+  assert.equal(ui.get('sheet-submit').textContent,'Saving...');
+  finish();await flush();
+  assert.match(ui.get('sheet-status').textContent,/Saved to tab/);
+  assert.equal(ui.get('sheet-access').open,false);
+  assert.equal(ui.get('sheet-submit').disabled,false);
+});
+test('utility layout forces light mode and opens the shared sheet safely', async t => {
+  const ui=await setup(t);
+  assert.equal(ui.dom.window.document.querySelector('meta[name="color-scheme"]').content,'light');
+  assert.equal(ui.get('open-sheet').target,'_blank');
+  assert.ok(ui.get('open-sheet').rel.includes('noopener'));
+  assert.ok(ui.get('open-sheet').href.includes('1ZbQ1BrGaJDhKXXaj8D2kwt8PgVlyrPvw2dOrD-5Wtds'));
+  assert.equal(ui.get('welcome').hidden,false);
+});
+
 async function setup(t, { fetcher, saved, extension = false } = {}) {
   const dom = new JSDOM(html, { url: 'http://127.0.0.1:3000', runScripts: 'outside-only' });
   t.after(() => dom.window.close());

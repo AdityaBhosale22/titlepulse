@@ -3,23 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="light">
   <title>TitlePulse · Website title analyzer</title>
   <link rel="stylesheet" href="popup.css">
   <script type="module" src="popup.js"></script>
 </head>
 <body>
   <main>
-    <header class="brand"><a href="popup.html" aria-label="TitlePulse home">Title<span>Pulse</span><span class="brand-mark" aria-hidden="true">↗</span></a><span class="descriptor">TITLE ANALYZER</span></header>
-    <section class="intro">
-      <h1>Find the themes.<br>Skip the reading.</h1>
-      <p>Find the phrases a website repeats in its article titles, with the matches to back them up.</p>
-    </section>
+    <header class="brand"><h1>TitlePulse</h1><a id="open-sheet" class="secondary" href="https://docs.google.com/spreadsheets/d/1ZbQ1BrGaJDhKXXaj8D2kwt8PgVlyrPvw2dOrD-5Wtds/edit" target="_blank" rel="noopener noreferrer" aria-label="Open team Google Sheet in a new tab">Open Sheet</a></header>
     <form id="analyze-form" novalidate>
       <div class="label-line"><label for="website">Website URL</label><button id="detect" type="button" class="text-button" hidden>Use current tab</button></div>
       <input id="website" name="website" type="text" inputmode="url" autocomplete="url" spellcheck="false" placeholder="example.com" aria-describedby="input-error" maxlength="2048" required>
       <p id="input-error" class="input-error" role="alert" hidden></p>
-      <button class="primary" id="analyze" type="submit">Analyze website <span aria-hidden="true">↗</span></button>
+      <button class="primary" id="analyze" type="submit">Analyze website</button>
     </form>
     <section id="status-panel" class="status-panel" aria-live="polite" aria-atomic="true" hidden>
       <div class="status-heading"><span id="spinner" class="spinner" aria-hidden="true" hidden></span><h2 id="status-title"></h2></div>
@@ -27,17 +23,14 @@
       <button id="retry" class="text-button" type="button" hidden>Reconnect to analysis</button>
     </section>
     <section id="welcome" class="welcome">
-      <span class="welcome-symbol" aria-hidden="true">Aa</span>
-      <h2>A little clarity for your content research.</h2>
-      <p>Enter a website to find its recurring topics.<br>Only titles count. No article-body analysis.</p>
+      <p>Ready. Enter a website to analyze its article titles.</p>
     </section>
     <section id="results" aria-label="Analysis results" hidden>
       <div class="summary"><div><span id="total" class="total">0</span><span class="total-label">titles analyzed</span></div><span id="result-state" class="result-state">Complete</span></div>
       <p class="result-site" id="result-site"></p>
-      <div class="export-line"><button id="export-excel" type="button" class="text-button" disabled>Export Excel</button><span>All results + source titles</span></div>
+      <div class="action-grid"><button id="save-sheet" type="button" class="text-button" disabled>Save to Google Sheet</button><button id="export-excel" type="button" class="text-button" disabled>Export Excel</button></div>
       <p id="export-status" class="export-status" role="status" aria-live="polite" hidden></p>
-      <div class="export-line"><button id="save-sheet" type="button" class="text-button" disabled>Save to Google Sheet</button></div>
-      <details><summary>Team sheet access</summary><label for="sheet-key">Team save key</label><input id="sheet-key" type="password" autocomplete="off" maxlength="256" placeholder="Provided by your administrator"><p class="count-note">Used only to authorize saving. Not stored after closing the popup.</p></details>
+      <details id="sheet-access"><summary>Team sheet access</summary><form id="sheet-form"><label for="sheet-key">Team password</label><div class="password-row"><input id="sheet-key" type="password" autocomplete="off" maxlength="256" placeholder="Enter team password" aria-describedby="sheet-help" required><button id="sheet-submit" class="secondary" type="submit" disabled>Submit &amp; Save</button></div><p id="sheet-help" class="count-note">Submit to save all results to the website's tab. Password is not stored after closing this popup.</p></form></details>
       <p id="sheet-status" class="export-status" role="status" aria-live="polite" hidden></p>
       <p class="count-note">Top patterns used in at least 2 article titles.<br>Matching titles are shown under each pattern.</p>
       <section class="result-section" aria-labelledby="phrases-heading"><div class="section-heading"><h2 id="phrases-heading">Recurring title patterns</h2></div><ol id="phrases" class="rankings patterns"></ol><p id="phrases-empty" class="empty" hidden>No recurring 2–4 word patterns found.</p></section>
@@ -45,7 +38,7 @@
       <details id="keyword-details"><summary>Explore individual keywords</summary><section class="result-section" aria-labelledby="keywords-heading"><div class="section-heading"><h2 id="keywords-heading">Top keywords</h2><span>Titles</span></div><ol id="keywords" class="rankings"></ol><p id="keywords-empty" class="empty" hidden>No recurring keywords found.</p></section></details>
       <details id="warnings" hidden><summary>About these results</summary><ul id="warning-list"></ul></details>
     </section>
-    <footer>Title patterns, at a glance.<span>Based only on article titles</span></footer>
+    <footer>Title-based analysis. Saves include all results and source titles.</footer>
   </main>
 </body>
 </html>

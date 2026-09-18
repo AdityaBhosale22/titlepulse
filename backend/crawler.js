@@ -37,9 +37,17 @@ export function extractPage(html, url) {
   const inspect = (node, depth = 0) => {
     if (!node || typeof node !== 'object' || depth > 8) return;
     const types = array(node['@type']);
-    if (types.some(type => /^(CollectionPage|Blog)$/i.test(type))) collection = true;
+    // Schema graphs also describe parent collections and recommended articles.
+    // Only use classification metadata that describes the page being fetched.
+    const identity = typeof node.url === 'string' ? node.url : node['@id'];
+    let currentPage = true;
+    if (typeof identity === 'string') {
+      try { currentPage = normalizeUrl(identity, url) === normalizeUrl(url); }
+      catch { currentPage = false; }
+    }
+    if (currentPage && types.some(type => /^(CollectionPage|Blog)$/i.test(type))) collection = true;
     if (types.some(type => /^(ItemList|ListItem)$/i.test(type))) return;
-    if (array(node['@type']).some(type => /^(Article|BlogPosting|NewsArticle|TechArticle|Report|ScholarlyArticle)$/i.test(type))) {
+    if (currentPage && types.some(type => /^(Article|BlogPosting|NewsArticle|TechArticle|Report|ScholarlyArticle)$/i.test(type))) {
       schemaArticle = true;
       if (typeof node.headline === 'string') schemaHeadline ||= node.headline;
     }
@@ -49,8 +57,11 @@ export function extractPage(html, url) {
     }
   };
   $('script[type="application/ld+json"]').slice(0, 20).each((_, el) => { try { inspect(JSON.parse($(el).text())); } catch { /* Invalid structured data is optional. */ } });
-  const ogArticle = $('meta[property="og:type"]').attr('content') === 'article';
-  const isListing = listingPath(url) || collection || ($('article').length > 1 && !$('article h1').length);
+  const ogArticle = $('meta[property="og:type"]').attr('content')?.trim().toLowerCase() === 'article';
+  // Related-post cards often use <article> while the page H1 sits elsewhere.
+  // This weak layout signal must not override explicit article metadata.
+  const cardListing = $('article').length > 1 && !$('article h1').length && !schemaArticle && !ogArticle;
+  const isListing = listingPath(url) || collection || cardListing;
   const isArticle = !isListing && !excluded.test(new URL(url).pathname) && (schemaArticle || ogArticle || articlePath(url) || $('article h1').length === 1);
   const title = [schemaHeadline, headings, $('meta[property="og:title"]').attr('content'), $('title').first().text()].map(value => cleanTitle(value || '', siteName)).find(Boolean) || '';
   const canonical = $('link[rel="canonical"]').attr('href');

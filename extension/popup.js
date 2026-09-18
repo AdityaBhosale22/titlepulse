@@ -23,6 +23,7 @@ function setBusy(value) {
   $('analyze').disabled = value || exporting;
   $('export-excel').disabled = value || exporting || !completedResult;
   $('save-sheet').disabled = value || sheetSaving || !completedResult;
+  updateSheetSubmit();
   $('website').disabled = value;
   $('detect').disabled = value;
   $('analyze').replaceChildren(document.createTextNode(value ? 'Analyzing…' : 'Analyze website'));
@@ -202,6 +203,8 @@ function showSheetState(state) {
   clearTimeout(sheetTimer);
   sheetSaving = state?.status === 'saving';
   $('save-sheet').disabled = busy || sheetSaving || !completedResult;
+  updateSheetSubmit();
+  if (state?.status === 'saved') $('sheet-access').open = false;
   $('save-sheet').textContent = sheetSaving ? 'Saving...' : 'Save to Google Sheet';
   $('sheet-status').hidden = !state;
   $('sheet-status').classList.toggle('error', state?.status === 'error');
@@ -218,7 +221,7 @@ function showSheetState(state) {
     }, 1000);
   }
 }
-$('save-sheet').addEventListener('click', async () => {
+async function saveSheet() {
   if (busy || sheetSaving || !completedResult || !activeJob) return;
   const key = $('sheet-key').value.trim();
   if (!key) { showSheetState({ status: 'error', error: 'Enter your team save key under Team sheet access.' }); $('sheet-key').closest('details').open = true; $('sheet-key').focus(); return; }
@@ -229,7 +232,15 @@ $('save-sheet').addEventListener('click', async () => {
     const state = await request('/api/analyses/' + id + '/sheets', { method: 'POST', headers: { 'X-TitlePulse-Team-Key': key } });
     if (activeJob === id) showSheetState(state);
   } catch (error) { if (activeJob === id) showSheetState({ status: 'error', error: error.message }); }
-});
+}
+function updateSheetSubmit() {
+  $('sheet-submit').disabled = busy || sheetSaving || !completedResult || !$('sheet-key').value.trim();
+  $('sheet-submit').textContent = sheetSaving ? 'Saving...' : 'Submit & Save';
+  $('sheet-form').setAttribute('aria-busy', String(sheetSaving));
+}
+$('save-sheet').addEventListener('click', saveSheet);
+$('sheet-key').addEventListener('input', updateSheetSubmit);
+$('sheet-form').addEventListener('submit', event => { event.preventDefault(); saveSheet(); });
 $('retry').addEventListener('click', () => { pollFailures = 0; setBusy(true); poll(); });
 async function detect({ silent = false } = {}) {
   try {
