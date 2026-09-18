@@ -156,6 +156,8 @@ Manual extension checks: submit an invalid URL; analyze a public blog; click Ana
 
 ## Hosting
 
+Discovery prioritizes editorial/article links over generic sitemap URLs, including when the candidate limit is full. It checks section-local sitemap indexes (such as `/blog/sitemap_index.xml`), follows related article links, supports flat article URLs with article markup, and excludes blog/localized landing pages. Sitemap and listing discovery have separate time budgets so they cannot consume the entire crawl. Results remain bounded samples on large sites; blocked or JavaScript-only pages may still be unavailable.
+
 This is a working local MVP, without billing or user accounts. To deploy one shared instance:
 
 1. Run the Node process behind an HTTPS reverse proxy and set `HOST=0.0.0.0` in the hosting environment.

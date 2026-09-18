@@ -12,9 +12,18 @@ const array = value => value ? (Array.isArray(value) ? value : [value]) : [];
 const section = /\/(blog|blogs|articles?|posts?|news|insights|journal|stories|resources)(\/|$)/i;
 const excluded = /\/(tag|tags|category|categories|author|authors|search|login|signup|contact|about|privacy|terms|feed|wp-json|cart|page)(\/|$)|\.(jpg|jpeg|png|gif|svg|webp|pdf|zip|xml|gz|mp4|css|js)$/i;
 
+const locales = /^(en|es|fr|de|pt|br|ua|uk|ru|pl|zh|ja|ko|it|nl|ar|hi)(-[a-z]{2})?$/i;
+const hub = /^(blogs?|articles?|posts?|news|insights|journal|stories|resources)$/i;
+export function listingPath(url) {
+  const parsed = new URL(url);
+  if (parsed.searchParams.has('p')) return false;
+  const parts = parsed.pathname.split('/').filter(Boolean);
+  return parts.every(part => hub.test(part) || locales.test(part)) || /\/(category|categories|tag|tags|author|authors|page)(\/|$)/i.test(parsed.pathname);
+}
+
 export function articlePath(url) {
   const path = new URL(url).pathname;
-  return !excluded.test(path) && (/(?:blog|blogs|articles?|posts?|news|insights|journal|stories)\/.+/i.test(path) || /\/\d{4}\/\d{1,2}\//.test(path));
+  return !listingPath(url) && !excluded.test(path) && (section.test(path) || /\/\d{4}\/\d{1,2}\//.test(path));
 }
 
 export function extractPage(html, url) {
@@ -24,8 +33,12 @@ export function extractPage(html, url) {
   const siteName = $('meta[property="og:site_name"]').attr('content') || '';
   let schemaHeadline = '';
   let schemaArticle = false;
+  let collection = false;
   const inspect = (node, depth = 0) => {
     if (!node || typeof node !== 'object' || depth > 8) return;
+    const types = array(node['@type']);
+    if (types.some(type => /^(CollectionPage|Blog)$/i.test(type))) collection = true;
+    if (types.some(type => /^(ItemList|ListItem)$/i.test(type))) return;
     if (array(node['@type']).some(type => /^(Article|BlogPosting|NewsArticle|TechArticle|Report|ScholarlyArticle)$/i.test(type))) {
       schemaArticle = true;
       if (typeof node.headline === 'string') schemaHeadline ||= node.headline;
@@ -37,7 +50,8 @@ export function extractPage(html, url) {
   };
   $('script[type="application/ld+json"]').slice(0, 20).each((_, el) => { try { inspect(JSON.parse($(el).text())); } catch { /* Invalid structured data is optional. */ } });
   const ogArticle = $('meta[property="og:type"]').attr('content') === 'article';
-  const isArticle = !excluded.test(new URL(url).pathname) && (schemaArticle || ogArticle || articlePath(url));
+  const isListing = listingPath(url) || collection || ($('article').length > 1 && !$('article h1').length);
+  const isArticle = !isListing && !excluded.test(new URL(url).pathname) && (schemaArticle || ogArticle || articlePath(url) || $('article h1').length === 1);
   const title = [schemaHeadline, headings, $('meta[property="og:title"]').attr('content'), $('title').first().text()].map(value => cleanTitle(value || '', siteName)).find(Boolean) || '';
   const canonical = $('link[rel="canonical"]').attr('href');
   const links = [];
@@ -45,7 +59,9 @@ export function extractPage(html, url) {
     const href = $(el).attr('href');
     try {
       const link = normalizeUrl(href, url);
-      if (sameSite(link, url) && !excluded.test(new URL(link).pathname)) links.push({ url: link, relevant: section.test(new URL(link).pathname) || /\b(blog|articles|insights|journal|news)\b/i.test($(el).text()) || $(el).closest('article').length > 0 });
+      const listing = listingPath(link);
+      const editorial = !$(el).closest('nav, footer, header').length && ($(el).closest('article, h2, h3').length > 0 || $(el).find('h2, h3').length > 0 || $(el).attr('rel')?.split(/\s+/).includes('bookmark'));
+      if (sameSite(link, url) && (!excluded.test(new URL(link).pathname) || (listing && section.test(new URL(link).pathname)))) links.push({ url: link, listing, editorial: Boolean(editorial), relevant: section.test(new URL(link).pathname) || /\b(blog|articles|insights|journal|news)\b/i.test($(el).text()) || Boolean(editorial) });
     } catch { /* Ignore non-web and malformed links. */ }
   });
   return { isArticle, title: blocked ? '' : title, canonical, links: blocked ? [] : links, blocked };
@@ -63,6 +79,7 @@ export async function crawlWebsite(input, report = () => {}, { fetcher = fetchTe
   const titles = [];
   const sourceTitles = [];
   const candidates = new Map();
+  const listings = new Set();
   const pages = new Map();
   const canonicalSeen = new Set();
   const titleSeen = new Set();
@@ -80,28 +97,40 @@ export async function crawlWebsite(input, report = () => {}, { fetcher = fetchTe
   const addCandidate = (raw, priority = 0) => {
     try {
       const url = normalizeUrl(raw, site);
-      if (!sameSite(url, site) || excluded.test(new URL(url).pathname)) return;
-      if (candidates.size >= limits.candidates && !candidates.has(url)) { warnings.add('Discovery limit reached; results cover a sample of this website.'); return; }
+      if (!sameSite(url, site) || listingPath(url) || excluded.test(new URL(url).pathname)) return;
+      priority = Math.max(priority, articlePath(url) ? 3 : 0);
+      if (candidates.size >= limits.candidates && !candidates.has(url)) {
+        warnings.add('Discovery limit reached; results cover a sample of this website.');
+        const lowest = [...candidates].reduce((a, b) => b[1] < a[1] ? b : a);
+        if (priority <= lowest[1]) return;
+        candidates.delete(lowest[0]);
+      }
       candidates.set(url, Math.max(priority, candidates.get(url) || 0));
       stats.discovered = candidates.size;
     } catch { /* Invalid sitemap/link URL. */ }
   };
-  const get = async url => {
+  const discoverLinks = page => {
+    for (const link of page?.links || []) if (link.relevant) {
+      if (link.listing) { if (listings.size < limits.listings) listings.add(link.url); }
+      else addCandidate(link.url, link.editorial ? 6 : articlePath(link.url) ? 4 : 1);
+    }
+  };
+  const get = async (url, requestSignal = controller.signal) => {
     if (controller.signal.aborted) throw new Error('Crawl time limit reached.');
     if (robots?.isAllowed(url, 'TitlePulse') === false) throw new Error('Blocked by robots.txt');
     try {
-      return await fetcher(url, { signal: controller.signal, site, beforeRequest, allowUrl: value => robots?.isAllowed(value, 'TitlePulse') !== false });
+      return await fetcher(url, { signal: requestSignal, site, beforeRequest, allowUrl: value => robots?.isAllowed(value, 'TitlePulse') !== false });
     } catch (error) {
       if (error.response?.status === 429) { warnings.add('The website requested fewer requests. Crawling stopped; results include titles already collected.'); controller.abort(); }
       throw error;
     }
   };
-  const readPage = async (url, optional = false) => {
+  const readPage = async (url, optional = false, timeout) => {
     url = normalizeUrl(url);
     if (pages.has(url)) return pages.get(url);
     const pending = (async () => {
       try {
-        const response = await get(url);
+        const response = await get(url, timeout ? AbortSignal.any([controller.signal, AbortSignal.timeout(timeout)]) : controller.signal);
         if (response.type && !/html/i.test(response.type)) { if (!optional) stats.nonArticles++; return null; }
         const page = { ...extractPage(response.text, response.url), url: response.url };
         if (page.blocked) throw new Error('Website blocked automated requests.');
@@ -144,18 +173,30 @@ export async function crawlWebsite(input, report = () => {}, { fetcher = fetchTe
     const home = await readPage(site);
     if (home) site = home.url;
     collect(home);
+    discoverLinks(home);
     const mapQueue = [`${new URL(site).origin}/sitemap.xml`, `${new URL(site).origin}/sitemap_index.xml`];
+    const sectionHubs = new Set([site, ...listings]);
+    for (const value of [...sectionHubs].slice(0, 3)) {
+      const parsed = new URL(value);
+      const parts = parsed.pathname.split('/').filter(Boolean);
+      const index = parts.findIndex(part => hub.test(part));
+      if (index < 0) continue;
+      const base = `${parsed.origin}/${parts.slice(0, index + 1).join('/')}`;
+      mapQueue.unshift(`${base}/sitemap_index.xml`, `${base}/sitemap.xml`, `${base}/wp-sitemap.xml`);
+    }
     const declaredMaps = new Set();
     for (const match of robotsText.matchAll(/^sitemap:\s*(\S+)/gim)) { mapQueue.push(match[1]); declaredMaps.add(match[1]); }
     const seenMaps = new Set();
     let mapSuccess = 0;
-    while (mapQueue.length && seenMaps.size < limits.sitemaps && !controller.signal.aborted) {
+    const mapDeadline = Date.now() + Math.min(20000, limits.duration / 3);
+    while (mapQueue.length && seenMaps.size < limits.sitemaps && !controller.signal.aborted && Date.now() < mapDeadline) {
       let url;
       try { url = normalizeUrl(mapQueue.shift(), site); } catch { continue; }
       if (!sameSite(url, site) || seenMaps.has(url)) continue;
       seenMaps.add(url);
       try {
-        const { text } = await get(url);
+        const mapSignal = AbortSignal.any([controller.signal, AbortSignal.timeout(Math.max(1, Math.floor(Math.min(3500, mapDeadline - Date.now()))))]);
+        const { text } = await get(url, mapSignal);
         if (/<!DOCTYPE|<!ENTITY/i.test(text) || XMLValidator.validate(text) !== true) throw new Error('Invalid sitemap');
         const xml = parser.parse(text);
         if (!xml.sitemapindex && !xml.urlset) throw new Error('Not a sitemap');
@@ -164,7 +205,7 @@ export async function crawlWebsite(input, report = () => {}, { fetcher = fetchTe
         children.sort((a, b) => Number(/post|blog|article/i.test(b)) - Number(/post|blog|article/i.test(a)));
         for (const child of children.slice(0, 100)) { try { declaredMaps.add(normalizeUrl(child, site)); } catch { /* Invalid URL. */ } }
         if (children.length > 100) warnings.add('Sitemap child limit reached; some articles may be missing.');
-        mapQueue.push(...children.slice(0, 100));
+        mapQueue.unshift(...children.slice(0, 100));
         for (const entry of array(xml.urlset?.url)) if (typeof entry.loc === 'string') addCandidate(entry.loc, articlePathSafe(entry.loc) ? 3 : /post|blog|article/i.test(url) ? 2 : 0);
       } catch {
         if (declaredMaps.has(url)) warnings.add('Some declared sitemaps could not be read; their articles may be missing.');
@@ -175,28 +216,30 @@ export async function crawlWebsite(input, report = () => {}, { fetcher = fetchTe
     if (mapQueue.length) warnings.add('Sitemap scan was limited; some articles may not be included.');
     if (!mapSuccess) warnings.add('No usable sitemap found. Results are based on discovered article links.');
     const guessedHubs = new Set([new URL('/blog', site).href, new URL('/articles', site).href]);
-    const listings = new Set();
-    for (const link of home?.links || []) if (link.relevant) { addCandidate(link.url, 2); if (!articlePath(link.url)) listings.add(link.url); }
     for (const hub of guessedHubs) if (!listings.has(hub)) listings.add(hub);
     let listingCount = 0;
+    const listingDeadline = Date.now() + Math.min(15000, limits.duration / 5);
     for (const url of listings) {
-      if (listingCount++ >= limits.listings || controller.signal.aborted) break;
-      const page = await readPage(url, guessedHubs.has(url) && !candidates.has(url));
+      if (listingCount++ >= limits.listings || controller.signal.aborted || Date.now() >= listingDeadline) break;
+      const page = await readPage(url, guessedHubs.has(url) && !candidates.has(url), Math.max(1, Math.floor(Math.min(3500, listingDeadline - Date.now()))));
       collect(page);
-      for (const link of page?.links || []) if (link.relevant || section.test(new URL(url).pathname)) {
-        addCandidate(link.url, articlePath(link.url) ? 3 : 1);
-        if (link.relevant && !articlePath(link.url) && listings.size < limits.listings) listings.add(link.url);
-      }
+      discoverLinks(page);
     }
+    if ([...listings].some(url => !pages.has(normalizeUrl(url)))) warnings.add('Some listing pages were not checked within the discovery budget.');
     // Process every discovered candidate, not just the first 100. The overall
     // deadline still bounds slow sites and is reported as a partial result.
-    const queue = [...candidates].sort((a, b) => b[1] - a[1]).map(([url]) => url).filter(url => url !== normalizeUrl(site));
-    let cursor = 0;
-    progress('crawling', `Reading titles from ${queue.length} candidate pages…`);
+    const scheduled = new Set(pages.keys());
+    let attempts = 0;
+    progress('crawling', `Reading titles from ${candidates.size} candidate pages…`);
     await Promise.all(Array.from({ length: limits.concurrency }, async () => {
-      while (cursor < queue.length && !controller.signal.aborted) {
-        const url = queue[cursor++];
-        collect(await readPage(url));
+      while (attempts < limits.candidates && !controller.signal.aborted) {
+        const next = [...candidates].filter(([url]) => !scheduled.has(url)).sort((a, b) => b[1] - a[1])[0];
+        if (!next) break;
+        const url = next[0];
+        scheduled.add(url); attempts++;
+        const page = await readPage(url);
+        collect(page);
+        discoverLinks(page);
         progress('crawling', `Checked ${stats.checked} pages; analyzed ${titles.length} distinct titles; ${stats.failed} failed.`);
       }
     }));
