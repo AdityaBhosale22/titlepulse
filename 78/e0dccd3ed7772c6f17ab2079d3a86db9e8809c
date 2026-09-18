@@ -1,0 +1,62 @@
+extension/popup.js
+  s_e794ed4f8e6113::t_dea2a9b4bf5807 256
+test/popup.test.js
+  s_e794ed4f8e6113::t_dea2a9b4bf5807 33-59,190,193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "autter_version": "1.6.9",
+  "base_commit_sha": "78e0dccd3ed7772c6f17ab2079d3a86db9e8809c",
+  "branch": "main",
+  "prompts": {
+    "s_e794ed4f8e6113": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b38e-f03b-76b1-9c1b-f610ffc64f28",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Aditya Bhosale <adityabhosale4388@gmail.com>",
+      "messages_url": "cas:366f112358c3395f64a950c70db73ae3f29cf96a5a7ad34f39de422581dfb3b2",
+      "total_additions": 30,
+      "total_deletions": 4,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    }
+  },
+  "humans": {
+    "h_87ad3c52b230b1": {
+      "author": "Aditya Bhosale <adityabhosale4388@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_e794ed4f8e6113": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b38e-f03b-76b1-9c1b-f610ffc64f28",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Aditya Bhosale <adityabhosale4388@gmail.com>",
+      "messages_url": "cas:366f112358c3395f64a950c70db73ae3f29cf96a5a7ad34f39de422581dfb3b2",
+      "stats": {
+        "total_additions": 30,
+        "total_deletions": 4,
+        "accepted_lines": 30,
+        "overriden_lines": 0,
+        "files": {
+          "extension/popup.js": {
+            "total_additions": 1,
+            "total_deletions": 2,
+            "accepted_lines": 1,
+            "overriden_lines": 0
+          },
+          "test/popup.test.js": {
+            "total_additions": 29,
+            "total_deletions": 2,
+            "accepted_lines": 29,
+            "overriden_lines": 0
+          }
+        }
+      }
+    }
+  }
+}
