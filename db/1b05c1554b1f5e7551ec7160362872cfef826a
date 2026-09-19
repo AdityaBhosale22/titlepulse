@@ -1,0 +1,81 @@
+extension/popup.js
+  s_7529bc1ee84d4c::t_b9525d7f4e0fb2 150
+README.md
+  s_7529bc1ee84d4c::t_b9525d7f4e0fb2 5,160
+test/popup.test.js
+  s_7529bc1ee84d4c::t_b9525d7f4e0fb2 203-213
+test/server.test.js
+  s_7529bc1ee84d4c::t_b9525d7f4e0fb2 162-202
+backend/server.js
+  s_7529bc1ee84d4c::t_b9525d7f4e0fb2 73-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "autter_version": "1.6.9",
+  "base_commit_sha": "db1b05c1554b1f5e7551ec7160362872cfef826a",
+  "branch": "main",
+  "prompts": {
+    "s_7529bc1ee84d4c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b8d7-0984-7530-8deb-41296317526f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Aditya Bhosale <adityabhosale4388@gmail.com>",
+      "messages_url": "cas:b5da6bcf25e99dc84a290872f094469c32e16c0ee71cc3e01dc9ea17512d5dc2",
+      "total_additions": 58,
+      "total_deletions": 4,
+      "accepted_lines": 902,
+      "overriden_lines": 0
+    }
+  },
+  "sessions": {
+    "s_7529bc1ee84d4c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b8d7-0984-7530-8deb-41296317526f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Aditya Bhosale <adityabhosale4388@gmail.com>",
+      "messages_url": "cas:b5da6bcf25e99dc84a290872f094469c32e16c0ee71cc3e01dc9ea17512d5dc2",
+      "stats": {
+        "total_additions": 58,
+        "total_deletions": 4,
+        "accepted_lines": 902,
+        "overriden_lines": 0,
+        "files": {
+          "README.md": {
+            "total_additions": 2,
+            "total_deletions": 2,
+            "accepted_lines": 162,
+            "overriden_lines": 0
+          },
+          "backend/server.js": {
+            "total_additions": 3,
+            "total_deletions": 1,
+            "accepted_lines": 132,
+            "overriden_lines": 0
+          },
+          "extension/popup.js": {
+            "total_additions": 1,
+            "total_deletions": 1,
+            "accepted_lines": 193,
+            "overriden_lines": 0
+          },
+          "test/popup.test.js": {
+            "total_additions": 11,
+            "total_deletions": 0,
+            "accepted_lines": 213,
+            "overriden_lines": 0
+          },
+          "test/server.test.js": {
+            "total_additions": 41,
+            "total_deletions": 0,
+            "accepted_lines": 202,
+            "overriden_lines": 0
+          }
+        }
+      }
+    }
+  }
+}
