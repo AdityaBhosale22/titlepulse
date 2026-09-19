@@ -35,9 +35,7 @@ h2 { font-size:14px; margin:0; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .summary { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:18px; padding-top:14px; border-top:1px solid var(--line); }
 .total { font-size:28px; font-weight:700; margin-right:6px; }
-.total-label,.result-site,.count-note,.sheet-status { color:var(--muted); font-size:12px; }
-.result-state { font-size:11px; background:var(--soft); color:var(--accent); padding:4px 7px; border-radius:4px; }
-.result-site { margin:4px 0 12px; overflow-wrap:anywhere; }
+.total-label,.count-note,.sheet-status { color:var(--muted); font-size:12px; }
 #open-sheet { width:100%; min-height:40px; }
 .count-note { margin:10px 0; }
 details { margin-top:14px; font-size:12px; }

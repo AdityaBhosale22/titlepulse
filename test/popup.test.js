@@ -43,11 +43,13 @@ test('Use current tab refreshes the full address including query and fragment', 
   ui.submit(); await flush();
   assert.equal(JSON.parse(ui.calls[0][1].body).url,address.split('#')[0]);
 });
-test('partial results retain badge and warnings without an extra success banner', async t => {
+test('partial results omit crawl metadata and retain warnings', async t => {
   const ui = await setup(t, {fetcher:async()=>({ok:true,json:async()=>({id:'job',status:'complete',result:result({partial:true,warnings:['Some pages timed out.']})})})});
   ui.get('website').value='example.com';ui.submit();await flush();
   assert.equal(ui.get('status-panel').hidden,true);
-  assert.equal(ui.get('result-state').textContent,'Partial results');
+  assert.equal(ui.get('result-state'),null);
+  assert.equal(ui.get('result-site'),null);
+  assert.equal(ui.get('total').textContent,'20');
   assert.equal(ui.get('warnings').hidden,false);
   assert.match(ui.get('warning-list').textContent,/timed out/);
 });
@@ -124,7 +126,7 @@ test('reports empty patterns even when recurring single keywords exist', async t
   assert.equal(ui.get('phrases-empty').hidden, false);
   assert.equal(ui.get('keyword-details').open, false);
   assert.equal(ui.get('warnings').hidden, false);
-  assert.equal(ui.get('result-state').textContent, 'Partial results');
+  assert.equal(ui.get('result-state'), null);
 });
 
 test('safely renders matching titles without interpreting markup', async t => {
@@ -152,7 +154,7 @@ test('popup shows partial and empty results and safely renders untrusted terms',
   const ui = await setup(t, { fetcher: async () => ({ ok: true, json: async () => ({ id: 'job', status: 'complete', result: result({ totalTitles: 0, keywords: [], phrases: [], partial: true, warnings: ['Some pages were blocked.'] }) }) }) });
   ui.get('website').value = 'example.com'; ui.submit(); await flush();
   assert.equal(ui.get('status-title').textContent, 'No article titles found');
-  assert.equal(ui.get('result-state').textContent, 'Partial results');
+  assert.equal(ui.get('result-state'), null);
   assert.equal(ui.get('warnings').hidden, false);
   assert.equal(ui.get('phrases-empty').hidden, false);
   const safe = await setup(t, { fetcher: async () => ({ ok: true, json: async () => ({ id: 'job', status: 'complete', result: result({ phrases: [{ term: '<img src=x onerror=alert(1)>', count: 2 }] }) }) }) });

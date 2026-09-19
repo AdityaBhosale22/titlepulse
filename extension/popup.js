@@ -71,8 +71,6 @@ function showPatterns(items, id = 'phrases') {
 function showResults(result) {
   $('results').hidden = false;
   $('total').textContent = result.totalTitles;
-  $('result-state').textContent = result.partial ? 'Partial results' : 'Complete';
-  $('result-site').textContent = new URL(result.website).hostname + (result.stats ? ` · ${result.stats.checked} pages checked, ${result.stats.failed} failed` : '');
   showPatterns(result.phrases);
   showPatterns(result.longTails || [], 'long-tails');
   showRanking('keywords', result.keywords);
