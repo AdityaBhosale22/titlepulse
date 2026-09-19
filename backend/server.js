@@ -22,6 +22,27 @@ export function createApp({ crawl = crawlWebsite, now = Date.now, jobTimeout = 1
   const exports = new WeakMap();
   let sheetWrites = 0;
   const ttl = 15 * 60 * 1000;
+  const sheetQueue = [];
+  function drainSheetQueue() {
+    while (sheetWrites < 2 && sheetQueue.length) {
+      const job = sheetQueue.shift();
+      sheetWrites++;
+      let watchdog;
+      Promise.race([
+        Promise.resolve().then(() => sheetSave(job.result)),
+        new Promise((_, reject) => { watchdog = setTimeout(() => reject(new UserError('Save confirmation timed out. Check the spreadsheet before retrying.', 504)), 50000); watchdog.unref(); })
+      ]).then(value => { job.sheetSave = { ...job.sheetSave, status: 'saved', tab: value.tab }; })
+        .catch(error => { job.sheetSave = { ...job.sheetSave, status: 'error', error: error instanceof UserError ? error.message : 'Unable to save. Check the spreadsheet before retrying.' }; })
+        .finally(() => { clearTimeout(watchdog); sheetWrites--; drainSheetQueue(); });
+    }
+  }
+  function autoSave(job) {
+    if (job.sheetSave && job.sheetSave.status !== 'error') return;
+    if (job.sheetSave?.attemptedAt && now() - job.sheetSave.attemptedAt < 10000) return;
+    job.sheetSave = { status: 'saving', attemptedAt: now() };
+    sheetQueue.push(job);
+    drainSheetQueue();
+  }
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     res.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" });
@@ -49,7 +70,10 @@ export function createApp({ crawl = crawlWebsite, now = Date.now, jobTimeout = 1
       const url = normalizeUrl(req.body?.url);
       cleanup();
       const existing = jobs.get(byUrl.get(url));
-      if (existing && existing.status !== 'error') return res.status(existing.status === 'complete' ? 200 : 202).json(publicJob(existing));
+      if (existing && existing.status !== 'error') {
+        if (existing.status === 'complete') autoSave(existing);
+        return res.status(existing.status === 'complete' ? 200 : 202).json(publicJob(existing));
+      }
       if ([...jobs.values()].some(job => job.status === 'running' && sameSite(job.url, url))) throw new UserError('An analysis of this website is already running. Reopen its original URL to resume it, or wait for it to finish.', 409);
       const bucket = rate.get(req.ip) || { start: now(), count: 0 };
       if (bucket.count >= 10 || rate.size >= 10000) throw new UserError('Too many requests. Please try again in a minute.', 429);
@@ -65,7 +89,7 @@ export function createApp({ crawl = crawlWebsite, now = Date.now, jobTimeout = 1
       }, jobTimeout);
       watchdog.unref();
       Promise.resolve().then(() => crawl(url, progress => { if (job.status === 'running') job.progress = progress; }, { signal: controller.signal }))
-        .then(result => { if (job.status === 'running') { job.status = 'complete'; job.result = result; } })
+        .then(result => { if (job.status === 'running') { job.status = 'complete'; job.result = result; autoSave(job); } })
         .catch(error => { if (job.status === 'running') { job.status = 'error'; job.error = error.message || 'Analysis failed. Please try again.'; } })
         .finally(() => { clearTimeout(watchdog); job.finishedAt ??= now(); });
     } catch (error) { next(error); }
@@ -92,28 +116,6 @@ export function createApp({ crawl = crawlWebsite, now = Date.now, jobTimeout = 1
     } catch (error) { next(error); }
   });
   const extension = fileURLToPath(new URL('../extension/', import.meta.url));
-  app.post('/api/analyses/:id/sheets', (req, res, next) => {
-    try {
-      cleanup();
-      const job = jobs.get(req.params.id);
-      if (!job) throw new UserError('This analysis expired. Analyze the website again before saving.', 404);
-      if (job.status !== 'complete') throw new UserError('Wait for the analysis to finish before saving.', 409);
-      if (job.sheetSave?.status === 'saving') return res.status(202).json(job.sheetSave);
-      if (job.sheetSave?.status === 'saved') return res.json(job.sheetSave);
-      if (sheetWrites >= 2) throw new UserError('Other sheet saves are running. Please retry shortly.', 429);
-      if (job.sheetSave?.attemptedAt && now() - job.sheetSave.attemptedAt < 10000) throw new UserError('Please wait a few seconds before retrying.', 429);
-      job.sheetSave = { status: 'saving', attemptedAt: now() };
-      sheetWrites++;
-      res.status(202).json(job.sheetSave);
-      let watchdog;
-      Promise.race([
-        Promise.resolve().then(() => sheetSave(job.result)),
-        new Promise((_, reject) => { watchdog = setTimeout(() => reject(new UserError('Save confirmation timed out. Check the spreadsheet before retrying.', 504)), 50000); watchdog.unref(); })
-      ]).then(value => { job.sheetSave = { ...job.sheetSave, status: 'saved', tab: value.tab }; })
-        .catch(error => { job.sheetSave = { ...job.sheetSave, status: 'error', error: error instanceof UserError ? error.message : 'Unable to save. Check the spreadsheet before retrying.' }; })
-        .finally(() => { clearTimeout(watchdog); sheetWrites--; });
-    } catch (error) { next(error); }
-  });
   app.use(express.static(extension, { index: 'popup.html' }));
   app.use((_, res) => res.status(404).json({ error: 'Not found.' }));
   app.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: error instanceof UserError ? error.message : error.type === 'entity.parse.failed' ? 'Request must contain valid JSON.' : error.status === 413 ? 'Request is too large.' : 'Something went wrong. Please try again.' }));

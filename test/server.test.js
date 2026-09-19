@@ -4,15 +4,15 @@ import { createApp } from '../backend/server.js';
 import { analyzeTitles } from '../backend/analyzer.js';
 import ExcelJS from 'exceljs';
 
-test('sheet saves work without a password, use full cached data and deduplicate', async t => {
+test('analyses automatically save full data without a popup and deduplicate', async t => {
   let finish, calls = 0;
   const full = { website:'https://example.com', rankedAnalysis:[{term:'hello',count:2,type:'Keyword'}], sourceTitles:[{title:'hello world',url:'https://example.com/a'}] };
   const base = await serve(t, {  crawl:async () => full, sheetSave: async result => { calls++; assert.equal(result,full); return new Promise(resolve => {finish=resolve;}); } });
   const job = await (await post(base,{url:'example.com'})).json();
   await delay(5);
-  const save = () => fetch(base+'/api/analyses/'+job.id+'/sheets',{method:'POST'});
-  assert.equal((await save()).status,202);
-  assert.equal((await save()).status,202);
+  const save = () => post(base,{url:'example.com'});
+  assert.equal((await save()).status,200);
+  assert.equal((await save()).status,200);
   assert.equal(calls,1);
   finish({tab:'example'}); await delay(5);
   assert.equal((await save()).status,200);
@@ -24,18 +24,18 @@ test('sheet save failures preserve analysis and can be retried after cooldown', 
   let clock=1000, calls=0;
   const base=await serve(t,{now:()=>clock,crawl:async()=>({website:'https://example.com'}),sheetSave:async()=>{calls++;throw new Error('private');}});
   const job=await (await post(base,{url:'example.com'})).json();await delay(5);
-  const save=()=>fetch(base+'/api/analyses/'+job.id+'/sheets',{method:'POST'});
+  const save=()=>post(base,{url:'example.com'});
   await save();await delay(5);
   const state=await (await fetch(base+'/api/analyses/'+job.id)).json();
   assert.equal(state.status,'complete');assert.equal(state.sheetSave.status,'error');
   assert.ok(!state.sheetSave.error.includes('private'));
-  assert.equal((await save()).status,429);
-  clock+=11000;assert.equal((await save()).status,202);await delay(5);assert.equal(calls,2);
+  assert.equal((await save()).status,200);assert.equal(calls,1);
+  clock+=11000;assert.equal((await save()).status,200);await delay(5);assert.equal(calls,2);
 });
 import { setTimeout as delay } from 'node:timers/promises';
 
 async function serve(t, options) {
-  const server = createApp(options).listen(0, '127.0.0.1');
+  const server = createApp({ sheetSave: async () => ({tab:'test'}), ...options }).listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
   return `http://127.0.0.1:${server.address().port}`;
@@ -133,4 +133,29 @@ test('different URLs on the same site cannot launch concurrent crawls', async t 
   const base = await serve(t, { crawl: () => new Promise(() => {}) });
   assert.equal((await post(base, { url: 'https://example.com/blog' })).status, 202);
   assert.equal((await post(base, { url: 'https://www.example.com/articles' })).status, 409);
+});
+
+
+test('automatic saves queue beyond two writes and retain partial and empty results', async t => {
+  const finishes = [];
+  const saved = [];
+  const base = await serve(t, {
+    crawl: async website => ({website,totalTitles:0,partial:true,sourceTitles:[],rankedAnalysis:[]}),
+    sheetSave: result => { saved.push(result); return new Promise(resolve => finishes.push(resolve)); }
+  });
+  const jobs=[];
+  for (const host of ['example.com','example.org','example.net']) {
+    jobs.push(await (await post(base,{url:host})).json());
+    await delay(5);
+  }
+  assert.equal(saved.length,2);
+  const queued=await (await fetch(base+'/api/analyses/'+jobs[2].id)).json();
+  assert.equal(queued.status,'complete');
+  assert.equal(queued.sheetSave.status,'saving');
+  finishes[0]({tab:'first'});await delay(5);
+  assert.equal(saved.length,3);
+  assert.equal(saved[2].totalTitles,0);
+  assert.equal(saved[2].partial,true);
+  finishes[1]({tab:'second'});finishes[2]({tab:'third'});await delay(5);
+  for (const job of jobs) assert.equal((await (await fetch(base+'/api/analyses/'+job.id)).json()).sheetSave.status,'saved');
 });

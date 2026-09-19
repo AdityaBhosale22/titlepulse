@@ -3,38 +3,36 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 
-function registerSheetTests() {
-test('Save writes directly without a password and never opens the sheet',async t=>{
- const ui=await setup(t,{fetcher:async url=>({ok:true,json:async()=>url.endsWith('/sheets')?{status:'saved',tab:'example'}:{id:'job',status:'complete',result:result()}})});
- let opened=0;ui.dom.window.open=()=>{opened++;};
- ui.get('website').value='example.com';ui.submit();await flush();ui.get('save-sheet').click();await flush();
- const call=ui.calls.find(([url])=>url.endsWith('/sheets'));
- assert.equal(call[1].method,'POST');assert.equal(call[1].headers,undefined);
- assert.equal(ui.get('sheet-key'),null);assert.equal(ui.dom.window.document.querySelector('input[type=password]'),null);
- assert.match(ui.get('sheet-status').textContent,/Saved to tab: example/);assert.equal(opened,0);
- assert.equal(ui.get('open-sheet').closest('.action-grid'),ui.get('save-sheet').closest('.action-grid'));
-});
-test('direct saves prevent duplicate requests and retain Excel access',async t=>{
- let finish;
- const ui=await setup(t,{fetcher:async url=>url.endsWith('/sheets')?new Promise(resolve=>{finish=()=>resolve({ok:true,json:async()=>({status:'saved',tab:'example'})});}):{ok:true,json:async()=>({id:'job',status:'complete',result:result()})}});
- ui.get('website').value='example.com';ui.submit();await flush();
- ui.get('save-sheet').click();ui.get('save-sheet').click();await flush();
- assert.equal(ui.calls.filter(([url])=>url.endsWith('/sheets')).length,1);
- assert.equal(ui.get('save-sheet').disabled,true);assert.equal(ui.get('export-excel').disabled,false);
- finish();await flush();assert.equal(ui.get('save-sheet').disabled,false);
-});
-test('save failures show an error without hiding results and permit retry',async t=>{
- const ui=await setup(t,{fetcher:async url=>url.endsWith('/sheets')?{ok:false,status:503,json:async()=>({error:'Save unavailable.'})}:{ok:true,json:async()=>({id:'job',status:'complete',result:result()})}});
- ui.get('website').value='example.com';ui.submit();await flush();ui.get('save-sheet').click();await flush();
- assert.equal(ui.get('sheet-status').classList.contains('error'),true);assert.equal(ui.get('results').hidden,false);assert.equal(ui.get('save-sheet').disabled,false);
-});
-}
 const html = await readFile(new URL('../extension/popup.html', import.meta.url), 'utf8');
 const script = (await readFile(new URL('../extension/popup.js', import.meta.url), 'utf8')).replace("import { API_BASE } from './config.js';", "const API_BASE = 'http://127.0.0.1:3000';");
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const result = overrides => ({ website: 'https://example.com/', totalTitles: 20, phrases: [{ term: 'content strategy', count: 8 }], keywords: [{ term: 'content', count: 12 }], partial: false, warnings: [], ...overrides });
-registerSheetTests();
 
+
+test('completed analysis shows confirmed automatic save and only Open Sheet', async t => {
+  const ui = await setup(t, { fetcher: async () => ({ ok:true, json:async()=>({id:'job',status:'complete',result:result(),sheetSave:{status:'saved',tab:'example'}}) }) });
+  ui.get('website').value='example.com'; ui.submit(); await flush();
+  assert.equal(ui.get('sheet-status').textContent,'\u2713 Saved to Google Sheet');
+  assert.equal(ui.calls.length,1);
+  for (const id of ['export-excel','save-sheet','sheet-key','sheet-form']) assert.equal(ui.get(id),null);
+  assert.equal(ui.dom.window.document.querySelectorAll('#results button, #results a').length,1);
+});
+test('reopening resumes save polling and confirms only after save succeeds', async t => {
+  let calls=0;
+  const ui=await setup(t,{saved:{url:'example.com',id:'job'},fetcher:async()=>({ok:true,json:async()=>({id:'job',status:'complete',result:result(),sheetSave:++calls===1?{status:'saving'}:{status:'saved',tab:'example'}})})});
+  assert.equal(ui.get('sheet-status').textContent,'Saving to Google Sheet?');
+  await new Promise(resolve=>setTimeout(resolve,1100));
+  assert.equal(ui.get('sheet-status').textContent,'\u2713 Saved to Google Sheet');
+  assert.ok(ui.calls.every(([,options])=>!options.method));
+});
+test('automatic save errors preserve results and Open Sheet without a false confirmation', async t => {
+  const ui=await setup(t,{fetcher:async()=>({ok:true,json:async()=>({id:'job',status:'complete',result:result(),sheetSave:{status:'error',error:'Save unavailable.'}})})});
+  ui.get('website').value='example.com';ui.submit();await flush();
+  assert.equal(ui.get('results').hidden,false);
+  assert.equal(ui.get('sheet-status').classList.contains('error'),true);
+  assert.match(ui.get('sheet-status').textContent,/Save unavailable/);
+  assert.ok(!ui.get('sheet-status').textContent.includes('\u2713'));
+});
 test('Use current tab refreshes the full address including query and fragment', async t => {
   const ui = await setup(t, { extension:true });
   const address = 'https://blog.example.com/marketing/?topic=email&sort=new#articles';
@@ -186,38 +184,6 @@ test('shows specific long-tail matches even when there are no recurring patterns
   assert.equal(ui.get('long-tails').querySelector('.count').textContent, '1 title');
   assert.equal(ui.get('long-tails-empty').hidden, true);
   assert.equal(ui.get('status-panel').hidden, true);
-  assert.equal(ui.get('export-excel').disabled, false);
-});
-
-test('downloads Excel from the full export endpoint and prevents duplicate export requests', async t => {
-  let release;
-  const ui = await setup(t, { fetcher: async path => path.endsWith('/export') ? new Promise(resolve => { release = resolve; }) : { ok: true, json: async () => ({ id: 'job', status: 'complete', result: result({ partial: true, warnings: ['Partial crawl'] }) }) } });
-  const downloads = [];
-  ui.dom.window.URL.createObjectURL = () => 'blob:export';
-  ui.dom.window.URL.revokeObjectURL = () => {};
-  ui.dom.window.HTMLAnchorElement.prototype.click = function () { downloads.push({ filename: this.download, url: this.href }); };
-  assert.equal(ui.get('export-excel').disabled, true);
-  ui.get('website').value = 'example.com'; ui.submit(); await flush();
-  ui.get('export-excel').click(); ui.get('export-excel').click(); await flush();
-  assert.equal(ui.calls.filter(([path]) => path.endsWith('/export')).length, 1);
-  assert.equal(ui.get('export-excel').disabled, true);
-  assert.equal(ui.get('analyze').disabled, true);
-  release({ ok: true, headers: { get: () => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }, blob: async () => new Blob(['xlsx']) });
-  await flush();
-  assert.deepEqual(downloads, [{ filename: 'titlepulse-example.com-partial.xlsx', url: 'blob:export' }]);
-  assert.match(ui.get('export-status').textContent, /partial crawl/);
-  assert.equal(ui.get('export-excel').disabled, false);
-  assert.equal(ui.get('analyze').disabled, false);
-});
-
-test('keeps results available after an export error and allows retry', async t => {
-  const ui = await setup(t, { fetcher: async path => path.endsWith('/export') ? { ok: false, json: async () => ({ error: 'Analysis expired. Analyze again before exporting.' }) } : { ok: true, json: async () => ({ id: 'job', status: 'complete', result: result() }) } });
-  ui.get('website').value = 'example.com'; ui.submit(); await flush();
-  ui.get('export-excel').click(); await flush();
-  assert.equal(ui.get('results').hidden, false);
-  assert.equal(ui.get('export-status').classList.contains('error'), true);
-  assert.match(ui.get('export-status').textContent, /Analysis expired/);
-  assert.equal(ui.get('export-excel').disabled, false);
 });
 
 test('popup stops analyzing when a restored job has exceeded its deadline', async t => {

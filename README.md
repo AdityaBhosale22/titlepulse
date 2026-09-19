@@ -1,10 +1,12 @@
 # TitlePulse
 
-### Readable reports and direct sheet saving
+### Analyze and automatically save
 
-Click Save to Google Sheet to save directly, without a password prompt. Open Sheet opens the spreadsheet separately; it is grouped with Export Excel below Save. The Excel workbook opens with Website Report, with summary, recurring-pattern evidence, long-tail keywords, individual keywords and clickable source URLs. Raw Ranked Analysis and Source Titles tabs remain available. Google Sheets uses the same report on one tab per website. **Update the deployed Apps Script using apps-script/Code.gs and follow apps-script/README.md** to enable the new layout. Editing local files alone does not update Google's deployment.
+Enter a website and click **Analyze website**. The backend analyzes it and automatically saves the full results and source titles to Google Sheets, even if the popup closes. Results stay visible during saving. A successful save shows **✓ Saved to Google Sheet**; **Open Sheet** is the only post-analysis action. Save errors remain visible without discarding the analysis; check the sheet before analyzing again to retry. Cached successful saves are not written again.
 
-A minimal Manifest V3 Chrome extension and Express backend that ranks recurring 2–4 word title patterns and specific long-tail phrases, with matching article titles. Keywords are an optional, collapsed secondary section. Export the full ranked analysis and source titles to Excel. No database, accounts, AI API, or frontend build step.
+Deploy the updated backend and reload the extension together. Keep `GOOGLE_SHEETS_SECRET` configured to match Apps Script's `TITLEPULSE_SECRET`. `GOOGLE_SHEETS_SCRIPT_URL` optionally overrides the existing deployment URL. No team password or enable flag is used.
+
+A minimal Manifest V3 Chrome extension and Express backend that ranks recurring 2–4 word title patterns and specific long-tail phrases, with matching article titles. Keywords are an optional, collapsed secondary section. Full ranked analysis and source titles are automatically saved to Google Sheets. No database, accounts, AI API, or frontend build step.
 
 ## Run the backend
 
@@ -60,16 +62,9 @@ Identical normalized titles contribute once even if found on different URLs. Num
 
 The reference illustrates search demand and competition conceptually. TitlePulse does **not** infer or display search volume, CPC, difficulty, competition, or any external SEO metrics. Its only frequency measure is the number of matching article titles.
 
-## Excel export
+## Saved report
 
-After an analysis completes, click **Export Excel**. The backend generates an actual `.xlsx` workbook using ExcelJS, including partial and empty completed analyses:
-
-1. **Ranked Analysis**: `Rank`, `Type` (`Phrase`, `Keyword`, `Long-tail`), `Phrase/Keyword`, `Number of Titles`.
-2. **Source Titles**: `Article Title`, `URL` for every analyzed article, including articles that match no displayed result. URLs are same-site canonical URLs when available, otherwise normalized fetched URLs.
-
-The workbook includes **all accepted analysis results before the UI top-10 limits**, including collapsed keywords and single-title long-tail candidates. Rejected noise and redundant phrase fragments are not analysis results. Rows are globally sorted by title count, then type and term; Rank is the resulting global row order. Each accepted category is kept even if the same text is eligible in another category.
-
-Counts and ranks are numeric cells; scraped text is stored as text, never formulas. Both sheets have frozen headers, filters, wrapping and readable widths. Partial exports use a `-partial.xlsx` filename and contain crawl warnings in the A1 cell notes and workbook description. Exports use the cached job and do not recrawl the site. If it expired or the backend restarted, analyze the site again. The button prevents duplicate downloads and displays export errors without discarding visible results.
+Google Sheets receives all accepted analysis results before the UI top-10 limits, including matching evidence, collapsed keywords, single-title long-tail candidates, and source title/URL pairs. Partial and empty completed analyses are included. The popup provides only **Open Sheet** after analysis. The internal workbook export API remains available for existing integrations, but has no popup action.
 
 ## Discovery and limits
 
@@ -150,7 +145,7 @@ npm test
 npm run check
 ```
 
-Tests use deterministic website fixtures, DOM interaction tests, and real local HTTP requests to the API. They cover frequency semantics, title extraction, sitemap indexes, fallback discovery, deduplication, private URL rejection, redirects, crawl deadlines, partial/empty results, job deduplication, concurrency bounds, expiry, popup validation, progress, restore, safe rendering, and errors. Long-tail tests cover the reference examples and specificity filtering; export tests reopen generated workbooks, reconcile every ranked row and source count, verify cell types and headers, and check downloads and errors. DOM tests do not replace visual verification or loading the extension in Chrome/Excel.
+Tests use deterministic website fixtures, DOM interaction tests, and real local HTTP requests to the API. They cover frequency semantics, title extraction, sitemap indexes, fallback discovery, deduplication, private URL rejection, redirects, crawl deadlines, partial/empty results, job deduplication, concurrency bounds, expiry, popup validation, progress, restore, safe rendering, and errors. Long-tail tests cover the reference examples and specificity filtering; export tests reopen generated workbooks, reconcile every ranked row and source count, verify cell types and headers. DOM tests do not replace visual verification or loading the extension in the browser.
 
 ExcelJS's UUID dependency is overridden to the compatible patched 11.x line to address the upstream dependency advisory; the workbook tests exercise the installed dependency combination.
 
@@ -162,38 +157,6 @@ Manual extension checks: submit an invalid URL; analyze a public blog; click Ana
 
 ### Shared Google Sheet saving
 
-Save to Google Sheet sends the full cached analysis to Apps Script without crawling again. GOOGLE_SHEETS_SCRIPT_URL overrides the default deployment; GOOGLE_SHEETS_SECRET must match the TITLEPULSE_SECRET script property. Keep that secret on the backend, never in extension files or Git. The team-password check has been removed; SHEETS_TEAM_KEY can be deleted from your hosting settings. There is no new enable flag. Restrict backend access to your team via internal network or gateway controls: anyone who can reach the API can create an analysis and request a sheet save. CORS is not authentication. Use HTTPS outside localhost.
+Completed analyses automatically queue a backend save, with at most two saves in flight. The popup polls its existing analysis to display save progress and confirmation. Reopening restores that state. Partial and empty completed analyses are also saved. Saved jobs are deduplicated for the 15-minute cache lifetime; requesting Analyze again after a save failure retries after a 10-second cooldown. Check the sheet before retrying an ambiguous timeout. Backend restarts clear the cache.
 
-Redeploy/restart the backend and reload the extension. Analyze, enter the team key, and click Save to Google Sheet. The deployed script owns per-host tab naming and replacement. Existing unrelated tabs remain untouched. Saves continue on the backend when the popup closes, and reopening restores their state while the analysis remains cached (15 minutes). Duplicate saves of a cached job return its saved confirmation without another write. Backend restarts lose in-memory state. After an ambiguous timeout, inspect the sheet before retrying. No automatic retries overwrite a later team save. Partial and empty completed results can be saved and replace the previous tab contents. The Apps Script secret and team key must both be configured before live verification.
-
-Discovery prioritizes editorial/article links over generic sitemap URLs, including when the candidate limit is full. It checks section-local sitemap indexes (such as `/blog/sitemap_index.xml`), follows related article links, supports flat article URLs with article markup, and excludes blog/localized landing pages. Sitemap and listing discovery have separate time budgets so they cannot consume the entire crawl. Results remain bounded samples on large sites; blocked or JavaScript-only pages may still be unavailable.
-
-This is a working local MVP, without billing or user accounts. To deploy one shared instance:
-
-1. Run the Node process behind an HTTPS reverse proxy and set `HOST=0.0.0.0` in the hosting environment.
-2. Set `extension/config.js`'s `API_BASE` to the HTTPS API origin and replace the local `host_permissions` entry in `extension/manifest.json` with `https://your-api-host/*`.
-3. Set `EXTENSION_ID` to the installed/published extension ID. Reload the unpacked extension after changes.
-4. Before offering unrestricted public service, add authentication, per-user quotas and infrastructure rate limiting. CORS is an origin restriction, not authentication; non-browser clients can call an unauthenticated endpoint. In-memory jobs require a single process (or sticky routing); restarts lose jobs.
-
-Outbound requests reject private, loopback, link-local, reserved, and mixed public/private DNS destinations, validate addresses at socket lookup, disable proxy environment inheritance, and validate each redirect. The API limits request size and concurrent work. No page scripts execute. Extension permissions are limited to active-tab URL detection, local storage, and the backend host.
-
-References: [Chrome extension permissions](https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions), [activeTab](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab), and [Axios request configuration](https://axios-http.com/docs/req_config).
-
-## Project layout
-
-```text
-backend/
-  server.js       Express API, job state, cache and request bounds
-  network.js      Public-URL validation and bounded HTTP transport
-  crawler.js      Sitemap/link discovery and article-title extraction
-  analyzer.js     Normalization and recurring-term ranking
-  long-tail.js    Specificity heuristics and long-tail title matching
-  export.js       Two-sheet Excel workbook generation
-extension/
-  manifest.json   Chrome Manifest V3
-  config.js       Backend URL
-  popup.html      Popup and web-preview interface
-  popup.css       Light/dark responsive styles
-  popup.js        Detection, validation, polling and safe result rendering
-test/             Deterministic analysis, crawler and API tests
-```
+The Apps Script deployment owns per-host tab naming and replacement. Keep its secret on the backend. Anyone with API access can request an analysis and sheet save; restrict backend access as appropriate for your team.

@@ -7,8 +7,6 @@ let busy = false;
 let activeJob = null;
 let timer;
 let pollFailures = 0;
-let exporting = false;
-let completedResult = null;
 let analysisDeadline = 0;
 let sheetTimer;
 let sheetSaving = false;
@@ -20,9 +18,7 @@ const storage = {
 
 function setBusy(value) {
   busy = value;
-  $('analyze').disabled = value || exporting;
-  $('export-excel').disabled = value || exporting || !completedResult;
-  $('save-sheet').disabled = value || sheetSaving || !completedResult;
+  $('analyze').disabled = value;
   $('website').disabled = value;
   $('detect').disabled = value;
   $('analyze').replaceChildren(document.createTextNode(value ? 'Analyzing…' : 'Analyze website'));
@@ -73,10 +69,6 @@ function showPatterns(items, id = 'phrases') {
   $(`${id}-empty`).hidden = rows.length > 0;
 }
 function showResults(result) {
-  completedResult = result;
-  $('export-excel').disabled = exporting;
-  $('save-sheet').disabled = sheetSaving;
-  $('export-status').hidden = true;
   $('results').hidden = false;
   $('total').textContent = result.totalTitles;
   $('result-state').textContent = result.partial ? 'Partial results' : 'Complete';
@@ -144,14 +136,15 @@ function validate(value) {
 }
 $('analyze-form').addEventListener('submit', async event => {
   event.preventDefault();
-  if (busy || exporting) return;
+  if (busy) return;
   let url;
   try { url = validate($('website').value); }
   catch (error) { $('input-error').textContent = error.message; $('input-error').hidden = false; $('website').setAttribute('aria-invalid', 'true'); $('website').focus(); return; }
   clearTimeout(timer); pollFailures = 0; analysisDeadline = 0;
   $('input-error').hidden = true; $('website').removeAttribute('aria-invalid');
   $('results').hidden = true;
-  completedResult = null;
+  clearTimeout(sheetTimer); sheetChecks = 0; activeJob = null;
+  showSheetState(null);
   setBusy(true); status('Starting analysis', 'Looking for article titles on your website…', { loading: true });
   try {
     const job = await request('/api/analyses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
@@ -159,53 +152,13 @@ $('analyze-form').addEventListener('submit', async event => {
     await handleJob(job);
   } catch (error) { setBusy(false); status('Couldn’t start analysis', error.message, { error: true }); }
 });
-$('export-excel').addEventListener('click', async () => {
-  if (busy || exporting || !completedResult || !activeJob) return;
-  exporting = true;
-  setBusy(false);
-  $('export-excel').textContent = 'Exporting…';
-  $('export-status').hidden = false;
-  $('export-status').classList.remove('error');
-  $('export-status').textContent = 'Preparing all ranked results and source titles…';
-  try {
-    let response;
-    try { response = await fetch(`${api}/api/analyses/${activeJob}/export`, { signal: AbortSignal.timeout(30000) }); }
-    catch { throw new Error('Could not download the workbook. Check the backend connection and try again.'); }
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      throw new Error(data.error || 'Excel export failed. Please try again.');
-    }
-    if (!response.headers.get('content-type')?.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')) throw new Error('The backend returned an unexpected export. Please update the backend and try again.');
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const host = new URL(completedResult.website).hostname.replace(/[^a-z0-9.-]/gi, '-');
-    link.href = url;
-    link.download = `titlepulse-${host}${completedResult.partial ? '-partial' : ''}.xlsx`;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    $('export-status').textContent = completedResult.partial ? 'Download started. This workbook contains partial crawl results.' : 'Download started. All analyzed results and source titles are included.';
-  } catch (error) {
-    $('export-status').classList.add('error');
-    $('export-status').textContent = error.message;
-  } finally {
-    exporting = false;
-    $('export-excel').textContent = 'Export Excel';
-    setBusy(busy);
-  }
-});
 $('website').addEventListener('input', () => { $('input-error').hidden = true; $('website').removeAttribute('aria-invalid'); });
 function showSheetState(state) {
   clearTimeout(sheetTimer);
   sheetSaving = state?.status === 'saving';
-  $('save-sheet').disabled = busy || sheetSaving || !completedResult;
-  if (state?.status === 'saved') $('save-sheet').focus();
-  $('save-sheet').textContent = sheetSaving ? 'Saving...' : 'Save to Google Sheet';
   $('sheet-status').hidden = !state;
   $('sheet-status').classList.toggle('error', state?.status === 'error');
-  $('sheet-status').textContent = state?.status === 'saved' ? 'Saved to tab: ' + state.tab : state?.status === 'error' ? state.error : state ? 'Saving all ranked results and source titles. You can close this popup.' : '';
+  $('sheet-status').textContent = state?.status === 'saved' ? '\u2713 Saved to Google Sheet' : state?.status === 'error' ? state.error + ' Open Sheet to check before analyzing again.' : state ? 'Saving to Google Sheet?' : '';
   if (sheetSaving) {
     const id = activeJob;
     sheetTimer = setTimeout(async () => {
@@ -218,17 +171,6 @@ function showSheetState(state) {
     }, 1000);
   }
 }
-async function saveSheet() {
-  if (busy || sheetSaving || !completedResult || !activeJob) return;
-  const id = activeJob;
-  sheetChecks = 0;
-  showSheetState({ status: 'saving' });
-  try {
-    const state = await request('/api/analyses/' + id + '/sheets', { method: 'POST' });
-    if (activeJob === id) showSheetState(state);
-  } catch (error) { if (activeJob === id) showSheetState({ status: 'error', error: error.message }); }
-}
-$('save-sheet').addEventListener('click', saveSheet);
 $('retry').addEventListener('click', () => { pollFailures = 0; setBusy(true); poll(); });
 async function detect({ silent = false } = {}) {
   try {
