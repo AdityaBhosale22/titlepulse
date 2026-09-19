@@ -147,7 +147,7 @@ $('analyze-form').addEventListener('submit', async event => {
   showSheetState(null);
   setBusy(true); status('Starting analysis', 'Looking for article titles on your website…', { loading: true });
   try {
-    const job = await request('/api/analyses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+    const job = await request('/api/analyses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, refresh: true }) });
     await storage.set({ url, id: job.id }).catch(() => {});
     await handleJob(job);
   } catch (error) { setBusy(false); status('Couldn’t start analysis', error.message, { error: true }); }

@@ -200,3 +200,14 @@ test('reopening a running job resumes polling without submitting a new analysis'
   assert.ok(ui.calls[0][0].endsWith('/api/analyses/running'));
   assert.equal(ui.get('status-message').textContent, 'Checked 10 pages; 2 failed.');
 });
+
+
+test('each explicit Analyze click requests fresh results while reopening only restores', async t => {
+  const ui = await setup(t, {saved:{url:'example.com',id:'saved'},fetcher:async()=>({ok:true,json:async()=>({id:'saved',status:'complete',result:result(),sheetSave:{status:'saved',tab:'example'}})})});
+  assert.equal(ui.calls.length,1);
+  assert.equal(ui.calls[0][1].method,undefined);
+  ui.submit();await flush();ui.submit();await flush();
+  const submissions=ui.calls.filter(([,options])=>options.method==='POST');
+  assert.equal(submissions.length,2);
+  for (const [,options] of submissions) assert.deepEqual(JSON.parse(options.body),{url:'https://example.com/',refresh:true});
+});

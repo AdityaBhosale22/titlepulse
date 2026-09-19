@@ -70,7 +70,9 @@ export function createApp({ crawl = crawlWebsite, now = Date.now, jobTimeout = 1
       const url = normalizeUrl(req.body?.url);
       cleanup();
       const existing = jobs.get(byUrl.get(url));
-      if (existing && existing.status !== 'error') {
+      // Explicit Analyze clicks refresh completed jobs; active work still deduplicates.
+      const refresh = req.body?.refresh === true;
+      if (existing && existing.status !== 'error' && (!refresh || existing.status === 'running' || existing.sheetSave?.status === 'saving')) {
         if (existing.status === 'complete') autoSave(existing);
         return res.status(existing.status === 'complete' ? 200 : 202).json(publicJob(existing));
       }

@@ -159,3 +159,44 @@ test('automatic saves queue beyond two writes and retain partial and empty resul
   finishes[1]({tab:'second'});finishes[2]({tab:'third'});await delay(5);
   for (const job of jobs) assert.equal((await (await fetch(base+'/api/analyses/'+job.id)).json()).sheetSave.status,'saved');
 });
+
+
+test('refresh analyzes and saves again after a saved tab is deleted', async t => {
+  let crawls=0,writes=0;
+  const tabs=new Map();
+  const base=await serve(t,{
+    crawl:async website=>({website,totalTitles:++crawls}),
+    sheetSave:async result=>{writes++;tabs.set('example',result);return {tab:'example'};}
+  });
+  const analyze=async()=>{
+    const response=await post(base,{url:'example.com',refresh:true});
+    assert.equal(response.status,202);
+    const job=await response.json();await delay(5);
+    assert.equal((await (await fetch(base+'/api/analyses/'+job.id)).json()).sheetSave.status,'saved');
+    return job;
+  };
+  const first=await analyze();
+  tabs.delete('example');
+  const second=await analyze();
+  assert.notEqual(first.id,second.id);
+  assert.equal(tabs.get('example').totalTitles,2);
+  assert.equal(crawls,2);assert.equal(writes,2);
+  await fetch(base+'/api/analyses/'+second.id);
+  assert.equal(writes,2);
+});
+
+test('refresh deduplicates running analyses and pending sheet saves', async t => {
+  let finishCrawl,finishSave,crawls=0,writes=0;
+  const base=await serve(t,{
+    crawl:()=>{crawls++;return new Promise(resolve=>{finishCrawl=resolve;});},
+    sheetSave:()=>{writes++;return new Promise(resolve=>{finishSave=resolve;});}
+  });
+  const analyze=async()=>await (await post(base,{url:'example.com',refresh:true})).json();
+  const first=await analyze();await delay(5);
+  assert.equal((await analyze()).id,first.id);assert.equal(crawls,1);
+  finishCrawl({website:'https://example.com'});await delay(5);
+  const pending=await analyze();
+  assert.equal(pending.id,first.id);assert.equal(pending.sheetSave.status,'saving');
+  assert.equal(crawls,1);assert.equal(writes,1);
+  finishSave({tab:'example'});await delay(5);
+});

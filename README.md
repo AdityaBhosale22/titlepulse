@@ -2,7 +2,7 @@
 
 ### Analyze and automatically save
 
-Enter a website and click **Analyze website**. The backend analyzes it and automatically saves the full results and source titles to Google Sheets, even if the popup closes. Results stay visible during saving. A successful save shows **✓ Saved to Google Sheet**; **Open Sheet** is the only post-analysis action. Save errors remain visible without discarding the analysis; check the sheet before analyzing again to retry. Cached successful saves are not written again.
+Enter a website and click **Analyze website**. The backend analyzes it and automatically saves the full results and source titles to Google Sheets, even if the popup closes. Results stay visible during saving. A successful save shows **✓ Saved to Google Sheet**; **Open Sheet** is the only post-analysis action. Save errors remain visible without discarding the analysis; check the sheet before analyzing again to retry. Each explicit Analyze click starts a fresh analysis and saves again, recreating a manually deleted tab. Reopening the popup only restores the existing job. Clicks during an active analysis or save reuse that work.
 
 Deploy the updated backend and reload the extension together. Keep `GOOGLE_SHEETS_SECRET` configured to match Apps Script's `TITLEPULSE_SECRET`. `GOOGLE_SHEETS_SCRIPT_URL` optionally overrides the existing deployment URL. No team password or enable flag is used.
 
@@ -157,6 +157,6 @@ Manual extension checks: submit an invalid URL; analyze a public blog; click Ana
 
 ### Shared Google Sheet saving
 
-Completed analyses automatically queue a backend save, with at most two saves in flight. The popup polls its existing analysis to display save progress and confirmation. Reopening restores that state. Partial and empty completed analyses are also saved. Saved jobs are deduplicated for the 15-minute cache lifetime; requesting Analyze again after a save failure retries after a 10-second cooldown. Check the sheet before retrying an ambiguous timeout. Backend restarts clear the cache.
+Completed analyses automatically queue a backend save, with at most two saves in flight. The popup polls its existing analysis to display save progress and confirmation. Reopening restores that state. Partial and empty completed analyses are also saved. The popup sends `refresh: true` on explicit Analyze clicks to replace completed cached work with a new analysis and save. Running analyses and pending saves are still deduplicated. API callers that omit `refresh` reuse the 15-minute cache; failed saves on that path retain a 10-second retry cooldown. Check the sheet before retrying an ambiguous timeout. Backend restarts clear the cache.
 
 The Apps Script deployment owns per-host tab naming and replacement. Keep its secret on the backend. Anyone with API access can request an analysis and sheet save; restrict backend access as appropriate for your team.
