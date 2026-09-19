@@ -39,15 +39,11 @@ h2 { font-size:14px; margin:0; }
 .result-state { font-size:11px; background:var(--soft); color:var(--accent); padding:4px 7px; border-radius:4px; }
 .result-site { margin:4px 0 12px; overflow-wrap:anywhere; }
 .action-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-.action-grid button { width:100%; min-height:40px; }
+.action-grid button, .action-grid a { width:100%; min-height:40px; }
+#save-sheet { grid-column:1 / -1; }
 .count-note { margin:10px 0; }
 details { margin-top:14px; font-size:12px; }
 summary { cursor:pointer; font-weight:600; min-height:30px; padding:5px 0; }
-#sheet-access { margin-top:10px; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:#fafcff; }
-#sheet-access label { margin:8px 0 6px; }
-.password-row { display:flex; gap:8px; align-items:center; }
-.password-row input { flex:1; }
-.password-row button { flex-shrink:0; min-height:44px; }
 .result-section { margin-top:18px; }
 .section-heading { display:flex; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid var(--line); }
 .rankings { list-style:none; margin:0; padding:0; counter-reset:ranking; }

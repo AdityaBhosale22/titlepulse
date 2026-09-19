@@ -4,26 +4,31 @@ import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 
 function registerSheetTests() {
-test('sheet action requires team key without affecting Excel export', async t => {
-  const ui=await setup(t);ui.get('website').value='example.com';ui.submit();await flush();
-  ui.get('save-sheet').click();await flush();
-  assert.equal(ui.get('sheet-access').hidden,false);
-  assert.equal(ui.get('sheet-status').hidden,true);
-  assert.equal(ui.get('export-excel').disabled,false);
-  assert.equal(ui.calls.length,1);
+test('Save writes directly without a password and never opens the sheet',async t=>{
+ const ui=await setup(t,{fetcher:async url=>({ok:true,json:async()=>url.endsWith('/sheets')?{status:'saved',tab:'example'}:{id:'job',status:'complete',result:result()}})});
+ let opened=0;ui.dom.window.open=()=>{opened++;};
+ ui.get('website').value='example.com';ui.submit();await flush();ui.get('save-sheet').click();await flush();
+ const call=ui.calls.find(([url])=>url.endsWith('/sheets'));
+ assert.equal(call[1].method,'POST');assert.equal(call[1].headers,undefined);
+ assert.equal(ui.get('sheet-key'),null);assert.equal(ui.dom.window.document.querySelector('input[type=password]'),null);
+ assert.match(ui.get('sheet-status').textContent,/Saved to tab: example/);assert.equal(opened,0);
+ assert.equal(ui.get('open-sheet').closest('.action-grid'),ui.get('save-sheet').closest('.action-grid'));
 });
-test('sheet action sends only authorization and job id, then shows saved tab', async t => {
-  const ui=await setup(t,{fetcher:async (url,options)=>({ok:true,json:async()=>url.endsWith('/sheets')?{status:'saved',tab:'example'}:{id:'job',status:'complete',result:result()}})});
-  ui.get('website').value='example.com';ui.submit();await flush();
-  ui.get('save-sheet').click();ui.get('sheet-key').value='team-key';ui.get('sheet-form').dispatchEvent(new ui.dom.window.Event('submit',{cancelable:true}));await flush();
-  const call=ui.calls.find(([url])=>url.endsWith('/sheets'));
-  assert.equal(call[1].headers['X-TitlePulse-Team-Key'],'team-key');
-  assert.equal(call[1].body,undefined);
-  assert.match(ui.get('sheet-status').textContent,/Saved to tab: example/);
-  assert.equal(ui.get('save-sheet').disabled,false);
+test('direct saves prevent duplicate requests and retain Excel access',async t=>{
+ let finish;
+ const ui=await setup(t,{fetcher:async url=>url.endsWith('/sheets')?new Promise(resolve=>{finish=()=>resolve({ok:true,json:async()=>({status:'saved',tab:'example'})});}):{ok:true,json:async()=>({id:'job',status:'complete',result:result()})}});
+ ui.get('website').value='example.com';ui.submit();await flush();
+ ui.get('save-sheet').click();ui.get('save-sheet').click();await flush();
+ assert.equal(ui.calls.filter(([url])=>url.endsWith('/sheets')).length,1);
+ assert.equal(ui.get('save-sheet').disabled,true);assert.equal(ui.get('export-excel').disabled,false);
+ finish();await flush();assert.equal(ui.get('save-sheet').disabled,false);
+});
+test('save failures show an error without hiding results and permit retry',async t=>{
+ const ui=await setup(t,{fetcher:async url=>url.endsWith('/sheets')?{ok:false,status:503,json:async()=>({error:'Save unavailable.'})}:{ok:true,json:async()=>({id:'job',status:'complete',result:result()})}});
+ ui.get('website').value='example.com';ui.submit();await flush();ui.get('save-sheet').click();await flush();
+ assert.equal(ui.get('sheet-status').classList.contains('error'),true);assert.equal(ui.get('results').hidden,false);assert.equal(ui.get('save-sheet').disabled,false);
 });
 }
-
 const html = await readFile(new URL('../extension/popup.html', import.meta.url), 'utf8');
 const script = (await readFile(new URL('../extension/popup.js', import.meta.url), 'utf8')).replace("import { API_BASE } from './config.js';", "const API_BASE = 'http://127.0.0.1:3000';");
 const flush = () => new Promise(resolve => setImmediate(resolve));
@@ -57,29 +62,6 @@ test('Use current tab reports unsupported browser pages without replacing the in
   assert.equal(ui.get('input-error').hidden,false);
 });
 
-test('password submit enables on input and saves with Enter/form submission', async t => {
-  let finish;
-  const ui=await setup(t,{fetcher:async url => {
-    if(url.endsWith('/sheets')) return new Promise(resolve => {finish=()=>resolve({ok:true,json:async()=>({status:'saved',tab:'example'})});});
-    return {ok:true,json:async()=>({id:'job',status:'complete',result:result()})};
-  }});
-  ui.get('website').value='example.com';ui.submit();await flush();
-  assert.equal(ui.get('sheet-submit').disabled,true);
-  ui.get('save-sheet').click();
-  assert.equal(ui.get('sheet-access').hidden,false);
-  ui.get('sheet-key').value='test-password';
-  ui.get('sheet-key').dispatchEvent(new ui.dom.window.Event('input'));
-  assert.equal(ui.get('sheet-submit').disabled,false);
-  const submit=()=>ui.get('sheet-form').dispatchEvent(new ui.dom.window.Event('submit',{bubbles:true,cancelable:true}));
-  submit();submit();await flush();
-  assert.equal(ui.calls.filter(([url])=>url.endsWith('/sheets')).length,1);
-  assert.equal(ui.get('sheet-submit').disabled,true);
-  assert.equal(ui.get('sheet-submit').textContent,'Saving...');
-  finish();await flush();
-  assert.match(ui.get('sheet-status').textContent,/Saved to tab/);
-  assert.equal(ui.get('sheet-access').hidden,true);
-  assert.equal(ui.get('sheet-submit').disabled,true);
-});
 test('utility layout forces light mode and opens the shared sheet safely', async t => {
   const ui=await setup(t);
   assert.equal(ui.dom.window.document.querySelector('meta[name="color-scheme"]').content,'light');

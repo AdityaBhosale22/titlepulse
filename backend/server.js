@@ -6,7 +6,6 @@ import { crawlWebsite } from './crawler.js';
 import { normalizeUrl, sameSite, UserError } from './network.js';
 import { createAnalysisWorkbook, XLSX_TYPE } from './export.js';
 import { saveToSheets } from './sheets.js';
-import { createHash, timingSafeEqual } from 'node:crypto';
 
 // Full export data stays in the job cache; the UI only receives top results.
 function publicJob(job) {
@@ -15,7 +14,7 @@ function publicJob(job) {
   return { ...job, result };
 }
 
-export function createApp({ crawl = crawlWebsite, now = Date.now, jobTimeout = 110000, sheetSave = saveToSheets, teamKey = process.env.SHEETS_TEAM_KEY } = {}) {
+export function createApp({ crawl = crawlWebsite, now = Date.now, jobTimeout = 110000, sheetSave = saveToSheets } = {}) {
   const app = express();
   const jobs = new Map();
   const byUrl = new Map();
@@ -31,7 +30,7 @@ export function createApp({ crawl = crawlWebsite, now = Date.now, jobTimeout = 1
     const sameOrigin = origin === `${req.protocol}://${req.get('host')}`;
     if (origin && !extensionAllowed && !sameOrigin) return res.status(403).json({ error: 'This origin is not allowed.' });
     if (origin) { res.set('Access-Control-Allow-Origin', origin); res.vary('Origin'); }
-    res.set('Access-Control-Allow-Headers', 'Content-Type, X-TitlePulse-Team-Key');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
     res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
@@ -95,9 +94,6 @@ export function createApp({ crawl = crawlWebsite, now = Date.now, jobTimeout = 1
   const extension = fileURLToPath(new URL('../extension/', import.meta.url));
   app.post('/api/analyses/:id/sheets', (req, res, next) => {
     try {
-      if (!teamKey || teamKey.length < 32) throw new UserError('Sheet saving is not configured. Ask the administrator to set SHEETS_TEAM_KEY (32+ characters).', 503);
-      const digest = value => createHash('sha256').update(value).digest();
-      if (!timingSafeEqual(digest(req.get('X-TitlePulse-Team-Key') || ''), digest(teamKey))) throw new UserError('Enter the correct team save key.', 401);
       cleanup();
       const job = jobs.get(req.params.id);
       if (!job) throw new UserError('This analysis expired. Analyze the website again before saving.', 404);

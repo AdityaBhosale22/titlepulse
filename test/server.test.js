@@ -4,30 +4,27 @@ import { createApp } from '../backend/server.js';
 import { analyzeTitles } from '../backend/analyzer.js';
 import ExcelJS from 'exceljs';
 
-test('sheet saves require team authorization, use cached full data and deduplicate', async t => {
+test('sheet saves work without a password, use full cached data and deduplicate', async t => {
   let finish, calls = 0;
-  const key = 'a'.repeat(32);
   const full = { website:'https://example.com', rankedAnalysis:[{term:'hello',count:2,type:'Keyword'}], sourceTitles:[{title:'hello world',url:'https://example.com/a'}] };
-  const base = await serve(t, { teamKey:key, crawl:async () => full, sheetSave: async result => { calls++; assert.equal(result,full); return new Promise(resolve => {finish=resolve;}); } });
+  const base = await serve(t, {  crawl:async () => full, sheetSave: async result => { calls++; assert.equal(result,full); return new Promise(resolve => {finish=resolve;}); } });
   const job = await (await post(base,{url:'example.com'})).json();
   await delay(5);
-  const save = value => fetch(base+'/api/analyses/'+job.id+'/sheets',{method:'POST',headers:{'X-TitlePulse-Team-Key':value}});
-  assert.equal((await save('wrong')).status,401);
-  assert.equal((await save(key)).status,202);
-  assert.equal((await save(key)).status,202);
+  const save = () => fetch(base+'/api/analyses/'+job.id+'/sheets',{method:'POST'});
+  assert.equal((await save()).status,202);
+  assert.equal((await save()).status,202);
   assert.equal(calls,1);
   finish({tab:'example'}); await delay(5);
-  assert.equal((await save(key)).status,200);
+  assert.equal((await save()).status,200);
   const state=await (await fetch(base+'/api/analyses/'+job.id)).json();
   assert.equal(state.sheetSave.status,'saved');
   assert.equal(state.result.sourceTitles,undefined);
 });
 test('sheet save failures preserve analysis and can be retried after cooldown', async t => {
   let clock=1000, calls=0;
-  const key='b'.repeat(32);
-  const base=await serve(t,{teamKey:key,now:()=>clock,crawl:async()=>({website:'https://example.com'}),sheetSave:async()=>{calls++;throw new Error('private');}});
+  const base=await serve(t,{now:()=>clock,crawl:async()=>({website:'https://example.com'}),sheetSave:async()=>{calls++;throw new Error('private');}});
   const job=await (await post(base,{url:'example.com'})).json();await delay(5);
-  const save=()=>fetch(base+'/api/analyses/'+job.id+'/sheets',{method:'POST',headers:{'X-TitlePulse-Team-Key':key}});
+  const save=()=>fetch(base+'/api/analyses/'+job.id+'/sheets',{method:'POST'});
   await save();await delay(5);
   const state=await (await fetch(base+'/api/analyses/'+job.id)).json();
   assert.equal(state.status,'complete');assert.equal(state.sheetSave.status,'error');

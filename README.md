@@ -1,8 +1,8 @@
 # TitlePulse
 
-### Readable reports and password prompt
+### Readable reports and direct sheet saving
 
-Click Save to Google Sheet to reveal the password form; Submit sends the save, Cancel clears it. There is no separate access toggle. The Excel workbook opens with Website Report, with summary, recurring-pattern evidence, long-tail keywords, individual keywords and clickable source URLs. Raw Ranked Analysis and Source Titles tabs remain available. Google Sheets uses the same report on one tab per website. **Update the deployed Apps Script using apps-script/Code.gs and follow apps-script/README.md** to enable the new layout. Editing local files alone does not update Google's deployment.
+Click Save to Google Sheet to save directly, without a password prompt. Open Sheet opens the spreadsheet separately; it is grouped with Export Excel below Save. The Excel workbook opens with Website Report, with summary, recurring-pattern evidence, long-tail keywords, individual keywords and clickable source URLs. Raw Ranked Analysis and Source Titles tabs remain available. Google Sheets uses the same report on one tab per website. **Update the deployed Apps Script using apps-script/Code.gs and follow apps-script/README.md** to enable the new layout. Editing local files alone does not update Google's deployment.
 
 A minimal Manifest V3 Chrome extension and Express backend that ranks recurring 2–4 word title patterns and specific long-tail phrases, with matching article titles. Keywords are an optional, collapsed secondary section. Export the full ranked analysis and source titles to Excel. No database, accounts, AI API, or frontend build step.
 
@@ -162,7 +162,7 @@ Manual extension checks: submit an invalid URL; analyze a public blog; click Ana
 
 ### Shared Google Sheet saving
 
-The separate Save to Google Sheet action sends the full cached analysis to the configured Apps Script; it never crawls again or changes Excel export. The provided deployment URL is the default in backend/sheets.js. Set GOOGLE_SHEETS_SCRIPT_URL to override it, GOOGLE_SHEETS_SECRET to the exact TITLEPULSE_SECRET script property, and SHEETS_TEAM_KEY to a separate random key of at least 32 characters. Put these values in Render environment settings (or your local untracked .env), never extension files or Git. Share only SHEETS_TEAM_KEY privately with teammates; they enter it under Team sheet access in the popup. Use HTTPS outside localhost. Rotate the team key when access must be revoked; this is shared-key access, not individual user identity.
+Save to Google Sheet sends the full cached analysis to Apps Script without crawling again. GOOGLE_SHEETS_SCRIPT_URL overrides the default deployment; GOOGLE_SHEETS_SECRET must match the TITLEPULSE_SECRET script property. Keep that secret on the backend, never in extension files or Git. The team-password check has been removed; SHEETS_TEAM_KEY can be deleted from your hosting settings. There is no new enable flag. Restrict backend access to your team via internal network or gateway controls: anyone who can reach the API can create an analysis and request a sheet save. CORS is not authentication. Use HTTPS outside localhost.
 
 Redeploy/restart the backend and reload the extension. Analyze, enter the team key, and click Save to Google Sheet. The deployed script owns per-host tab naming and replacement. Existing unrelated tabs remain untouched. Saves continue on the backend when the popup closes, and reopening restores their state while the analysis remains cached (15 minutes). Duplicate saves of a cached job return its saved confirmation without another write. Backend restarts lose in-memory state. After an ambiguous timeout, inspect the sheet before retrying. No automatic retries overwrite a later team save. Partial and empty completed results can be saved and replace the previous tab contents. The Apps Script secret and team key must both be configured before live verification.
 

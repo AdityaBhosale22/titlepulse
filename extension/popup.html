@@ -10,7 +10,7 @@
 </head>
 <body>
   <main>
-    <header class="brand"><h1>TitlePulse</h1><a id="open-sheet" class="secondary" href="https://docs.google.com/spreadsheets/d/1ZbQ1BrGaJDhKXXaj8D2kwt8PgVlyrPvw2dOrD-5Wtds/edit" target="_blank" rel="noopener noreferrer" aria-label="Open team Google Sheet in a new tab">Open Sheet</a></header>
+    <header class="brand"><h1>TitlePulse</h1></header>
     <form id="analyze-form" novalidate>
       <div class="label-line"><label for="website">Website URL</label><button id="detect" type="button" class="text-button" hidden>Use current tab</button></div>
       <input id="website" name="website" type="text" inputmode="url" autocomplete="url" spellcheck="false" placeholder="example.com" aria-describedby="input-error" maxlength="2048" required>
@@ -28,9 +28,8 @@
     <section id="results" aria-label="Analysis results" hidden>
       <div class="summary"><div><span id="total" class="total">0</span><span class="total-label">titles analyzed</span></div><span id="result-state" class="result-state">Complete</span></div>
       <p class="result-site" id="result-site"></p>
-      <div class="action-grid"><button id="save-sheet" type="button" class="text-button" disabled>Save to Google Sheet</button><button id="export-excel" type="button" class="text-button" disabled>Export Excel</button></div>
+      <div class="action-grid"><button id="save-sheet" type="button" class="text-button" disabled>Save to Google Sheet</button><a id="open-sheet" class="secondary" href="https://docs.google.com/spreadsheets/d/1ZbQ1BrGaJDhKXXaj8D2kwt8PgVlyrPvw2dOrD-5Wtds/edit" target="_blank" rel="noopener noreferrer" aria-label="Open team Google Sheet in a new tab">Open Sheet</a><button id="export-excel" type="button" class="text-button" disabled>Export Excel</button></div>
       <p id="export-status" class="export-status" role="status" aria-live="polite" hidden></p>
-      <div id="sheet-access" hidden><form id="sheet-form"><label for="sheet-key">Team password</label><div class="password-row"><input id="sheet-key" type="password" autocomplete="off" maxlength="256" placeholder="Enter team password" required><button id="sheet-submit" class="secondary" type="submit" disabled>Submit</button><button id="sheet-cancel" class="secondary" type="button">Cancel</button></div></form></div>
       <p id="sheet-status" class="export-status" role="status" aria-live="polite" hidden></p>
       <section class="result-section" aria-labelledby="phrases-heading"><div class="section-heading"><h2 id="phrases-heading">Recurring title patterns</h2></div><ol id="phrases" class="rankings patterns"></ol><p id="phrases-empty" class="empty" hidden>No recurring 2–4 word patterns found.</p></section>
       <section class="result-section" aria-labelledby="long-tails-heading"><div class="section-heading"><h2 id="long-tails-heading">Long-tail keywords</h2></div><p class="count-note">Specific topics and search intent from your titles.<br>Can appear in just one article. No search-demand estimates.</p><ol id="long-tails" class="rankings patterns"></ol><p id="long-tails-empty" class="empty" hidden>No sufficiently specific long-tail phrases found.</p></section>
