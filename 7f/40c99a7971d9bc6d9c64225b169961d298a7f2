@@ -1,0 +1,71 @@
+extension/popup.css
+  s_7529bc1ee84d4c::t_c470ee0c82af74 38
+test/popup.test.js
+  s_7529bc1ee84d4c::t_c470ee0c82af74 46,50-52,129,157
+extension/popup.html
+  s_7529bc1ee84d4c::t_c470ee0c82af74 29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "autter_version": "1.6.9",
+  "base_commit_sha": "7f40c99a7971d9bc6d9c64225b169961d298a7f2",
+  "branch": "main",
+  "prompts": {
+    "s_7529bc1ee84d4c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b8d7-0984-7530-8deb-41296317526f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Aditya Bhosale <adityabhosale4388@gmail.com>",
+      "messages_url": "cas:978352d6db9b21b4ab8f322ba395fbc408f829c93a07fcd08004bbf1c707df8c",
+      "total_additions": 8,
+      "total_deletions": 11,
+      "accepted_lines": 502,
+      "overriden_lines": 0
+    }
+  },
+  "sessions": {
+    "s_7529bc1ee84d4c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b8d7-0984-7530-8deb-41296317526f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Aditya Bhosale <adityabhosale4388@gmail.com>",
+      "messages_url": "cas:978352d6db9b21b4ab8f322ba395fbc408f829c93a07fcd08004bbf1c707df8c",
+      "stats": {
+        "total_additions": 8,
+        "total_deletions": 11,
+        "accepted_lines": 502,
+        "overriden_lines": 0,
+        "files": {
+          "extension/popup.css": {
+            "total_additions": 1,
+            "total_deletions": 3,
+            "accepted_lines": 56,
+            "overriden_lines": 0
+          },
+          "extension/popup.html": {
+            "total_additions": 1,
+            "total_deletions": 2,
+            "accepted_lines": 40,
+            "overriden_lines": 0
+          },
+          "extension/popup.js": {
+            "total_additions": 0,
+            "total_deletions": 2,
+            "accepted_lines": 191,
+            "overriden_lines": 0
+          },
+          "test/popup.test.js": {
+            "total_additions": 6,
+            "total_deletions": 4,
+            "accepted_lines": 215,
+            "overriden_lines": 0
+          }
+        }
+      }
+    }
+  }
+}
